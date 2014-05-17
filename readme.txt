@@ -48,4 +48,4 @@ Change log
 	
 	
 	
-This plugin is licensed under the MIT license.
+This plugin is licensed under the MIT license. Copyright (c) 2014 SIT89
