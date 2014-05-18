@@ -112,28 +112,7 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Update()
         {
-            if (timer_active)
-            {
-                if ((Timer_Trigger + Timer_Delay) <= Planetarium.GetUniversalTime())
-                {
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: Has Staged Delayed");
-
-                    timer_active = false;
-                    quicksave_file_name = gamesave_name + FlightGlobals.ActiveVessel.currentStage.ToString();
-
-                    if (search_for_new_vessels(quicksave_file_name))
-                    {
-                        GamePersistence.SaveGame(quicksave_file_name, HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
-
-                        if (get_save_value("_SAVE_Main_Vessel") != FlightGlobals.ActiveVessel.id.ToString() && get_save_value("_SAVE_Switched_To_Dropped") == false.ToString())
-                            main_vessel_changed(quicksave_file_name);
-
-                        set_save_value(quicksave_file_name, Planetarium.GetUniversalTime().ToString());
-                        write_save_values_to_file();
-                    }
-                }
-            }
+            flight_scene_update_routine();
         }
 
 

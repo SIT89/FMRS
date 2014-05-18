@@ -35,7 +35,7 @@ namespace FMRS
 {
     public class FMRS_Core : MonoBehaviour
     {
-        public const string mod_version = "v0.1.01";
+        public const string mod_version = "v0.1.02";
         public const string gamesave_name = "FMRS_save";
 
         public Dictionary<string, string> Save_File_Content = new Dictionary<string, string>();
@@ -55,6 +55,7 @@ namespace FMRS
         public bool Debug_Active = true;
         public bool Debug_Level_1_Active = false;
         public Guid destr_vessel_id;
+        public bool undocked_vessel;
 
         public Vector2 scroll_Vector = Vector2.zero;
 
@@ -191,7 +192,10 @@ namespace FMRS
                         save_files.Add(temp_keyvalue.Value);
                 }
 
-                save_files.Sort();
+                save_files.Sort(delegate(string x, string y)
+                {
+                    return get_save_value(y).CompareTo(get_save_value(x));
+                });
 
                 if (save_files.Count > 0)
                 {
@@ -207,7 +211,10 @@ namespace FMRS
 
                     GUILayout.Space(5);
                     GUILayout.BeginVertical(areaStyle);
-                    GUILayout.Box("Stage " + save_files.Last().Substring(9) + " separated at " + get_time_string(Convert.ToDouble(get_save_value(save_files.Last())) - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(220));
+                    if(save_files.Last().Contains("_undocked_"))
+                        GUILayout.Box("Undocked at " + get_time_string(Convert.ToDouble(get_save_value(save_files.Last())) - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(220));
+                    else
+                        GUILayout.Box("Stage " + save_files.Last().Substring(9) + " separated at " + get_time_string(Convert.ToDouble(get_save_value(save_files.Last())) - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(220));
 
                     foreach (KeyValuePair<Guid, string> vessel_in_savefile in Vessels_dropped)
                     {
@@ -355,6 +362,7 @@ namespace FMRS
 
             Timer_Trigger = Planetarium.GetUniversalTime();
             timer_active = true;
+            undocked_vessel = false;
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: Has Staged");
@@ -977,7 +985,6 @@ namespace FMRS
                 Save_File_Content.Remove(string_value);
             });
 
-
             foreach (KeyValuePair<Guid, string> write_keyvalue in Vessels_dropped)
             {
                 set_save_value(write_keyvalue.Key.ToString(), write_keyvalue.Value);
@@ -1027,6 +1034,7 @@ namespace FMRS
             GameEvents.onVesselChange.Remove(vessel_change_handler);
             GameEvents.OnVesselRecoveryRequested.Remove(recovery_requested_handler);
             GameEvents.onGameSceneLoadRequested.Remove(scene_change_handler);
+            GameEvents.onVesselCreate.Remove(vessel_create_routine);
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leave disable_mod()");
@@ -1314,7 +1322,9 @@ namespace FMRS
             really_close_old = false;
             revert_to_launch = false;
             revert_to_launch_old = false;
+            undocked_vessel = false;
             GameEvents.onStageSeparation.Add(staging_routine);
+            GameEvents.onVesselCreate.Add(vessel_create_routine);
             GameEvents.onCollision.Add(crash_handler);
             GameEvents.onCrash.Add(crash_handler);
             GameEvents.onCrashSplashdown.Add(crash_handler);
@@ -1369,6 +1379,66 @@ namespace FMRS
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving main_vessel_changed(string save_file)");
+        }
+
+/*************************************************************************************************************************/
+        public void vessel_create_routine(Vessel input)
+        {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter vessel_create_routine(Vessel input)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: Vessel created");
+
+            Timer_Trigger = Planetarium.GetUniversalTime();
+            timer_active = true;
+            undocked_vessel = true;
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leaving vessel_create_routine(Vessel input)");
+        }
+
+
+/*************************************************************************************************************************/
+        public void flight_scene_update_routine()
+        {
+            if (timer_active)
+            {
+                if ((Timer_Trigger + Timer_Delay) <= Planetarium.GetUniversalTime())
+                {
+                    if (Debug_Active)
+                        Debug.Log("#### FMRS: Has Staged Delayed");
+
+                    timer_active = false;
+
+                    if (undocked_vessel)
+                    {
+                        int nr_save_file = 0;
+
+                        foreach (KeyValuePair<Guid, string> temp_keyvalues in Vessels_dropped)
+                        {
+                            if (temp_keyvalues.Value.Contains("_undocked_"))
+                                if (nr_save_file <= Convert.ToInt16(temp_keyvalues.Value.Substring(19)))
+                                    nr_save_file = Convert.ToInt16(temp_keyvalues.Value.Substring(19)) + 1;
+                        }
+
+                        quicksave_file_name = gamesave_name + "_undocked_" + nr_save_file;
+                        undocked_vessel = false;
+                    }
+                    else
+                        quicksave_file_name = gamesave_name + FlightGlobals.ActiveVessel.currentStage.ToString();
+
+                    if (search_for_new_vessels(quicksave_file_name))
+                    {
+                        GamePersistence.SaveGame(quicksave_file_name, HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
+
+                        if (get_save_value("_SAVE_Main_Vessel") != FlightGlobals.ActiveVessel.id.ToString() && get_save_value("_SAVE_Switched_To_Dropped") == false.ToString())
+                            main_vessel_changed(quicksave_file_name);
+
+                        set_save_value(quicksave_file_name, Planetarium.GetUniversalTime().ToString());
+                        write_save_values_to_file();
+                    }
+                }
+            }
         }
     }
 }
