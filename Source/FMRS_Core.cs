@@ -35,7 +35,7 @@ namespace FMRS
 {
     public class FMRS_Core : MonoBehaviour
     {
-        public const string mod_version = "v0.0.11";
+        public const string mod_version = "v0.1.01";
         public const string gamesave_name = "FMRS_save";
 
         public Dictionary<string, string> Save_File_Content = new Dictionary<string, string>();
@@ -153,6 +153,7 @@ namespace FMRS
             {
                 really_close_old = really_close;
                 windowPos.height = 0;
+                windowPos.width = 0;
             }
 
             if (really_close)
@@ -165,6 +166,7 @@ namespace FMRS
                 if (GUILayout.Button("YES", Button_Style_Big, GUILayout.Width(155)))
                 {
                     delete_dropped_vessels();
+                    set_save_value("_SAVE_Has_Closed", true.ToString());
                     disable_FMRS();
                     if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && get_save_value("_SAVE_Has_Launched") == true.ToString() && FlightGlobals.ActiveVessel.id.ToString() != get_save_value("_SAVE_Main_Vessel"))
                         jump_to_vessel("Main");
@@ -598,7 +600,14 @@ namespace FMRS
                     Debug.Log("#### FMRS: try to laod gamefile " + get_save_value(vessel_id.ToString()));
 
                 for (load_vessel = 0; load_vessel < loadgame.flightState.protoVessels.Count && loadgame.flightState.protoVessels[load_vessel].vesselID != vessel_id; load_vessel++) ;
-                FlightDriver.StartAndFocusVessel(loadgame, load_vessel);
+                if (load_vessel <= loadgame.flightState.protoVessels.Count)
+                {
+                    if (Debug_Active)
+                        Debug.Log("#### FMRS: FMRS_save found, Vessel found, try to start");
+
+                    set_save_value("_SAVE_Switched_To_Dropped", true.ToString());
+                    FlightDriver.StartAndFocusVessel(loadgame, load_vessel);
+                }
             }
             else
                 if (Debug_Active)
@@ -636,7 +645,8 @@ namespace FMRS
                 if (load_vessel <= loadgame.flightState.protoVessels.Count)
                 {
                     if (Debug_Active)
-                        Debug.Log("#### FMRS: FMRS_main_save found, try to start");
+                        Debug.Log("#### FMRS: FMRS_main_save found, main vessel found, try to start");
+                    set_save_value("_SAVE_Switched_To_Dropped", false.ToString());
                     FlightDriver.StartAndFocusVessel(loadgame, load_vessel);
                 }
                 else
@@ -1182,8 +1192,10 @@ namespace FMRS
             set_save_value("_SAVE_Main_Vessel", "null");
             set_save_value("_SAVE_Launched_At", "null");
             set_save_value("_SAVE_Has_Launched", false.ToString());
+            set_save_value("_SAVE_Has_Closed", false.ToString());
             set_save_value("_SAVE_Has_Recovered", false.ToString());
             set_save_value("_SAVE_Recovered_Vessel", "null");
+            set_save_value("_SAVE_Switched_To_Dropped", false.ToString());
 
 #if DEBUG
             set_save_value("_SETTING_Debug", true.ToString());
@@ -1232,11 +1244,6 @@ namespace FMRS
             if (Debug_Active)
                 Debug.Log("#### FMRS: scene_change_handler");
 
-            /*if (get_save_value("_SAVE_Has_Launched") == true.ToString() && get_save_value("_SETTING_Enabled") == true.ToString())
-            {
-                save_landed_vessel();
-            }*/
-
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leave scene_change_handler(GameScenes input_scene)");
 
@@ -1249,20 +1256,26 @@ namespace FMRS
                 Debug.Log("#### FMRS: entering flight_scene_start_routine()");
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS On Start");
+               
 
-            if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH || get_save_value("_SAVE_Has_Launched") == false.ToString())
+            if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
             {
                 delete_dropped_vessels();
 
+                set_save_value("_SAVE_Has_Launched", false.ToString());
                 set_save_value("_SAVE_Main_Vessel", FlightGlobals.ActiveVessel.id.ToString());
                 set_save_value("_SAVE_Launched_At", false.ToString());
-                set_save_value("_SAVE_Has_Launched", false.ToString());
+                set_save_value("_SAVE_Switched_To_Dropped", false.ToString());
+
                 GamePersistence.SaveGame("before_launch", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
             }
             else
             {
                 get_dropped_vessels();
             }
+
+            if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value("_SAVE_Main_Vessel"))
+                set_save_value("_SAVE_Switched_To_Dropped", false.ToString());
 
             if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id))
             {
@@ -1312,7 +1325,50 @@ namespace FMRS
             RenderingManager.AddToPostDrawQueue(3, new Callback(drawGUI));
 
             if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: flight_scene_start_routine()");
+                Debug.Log("#### FMRS: leaving flight_scene_start_routine()");
+        }
+
+
+/*************************************************************************************************************************/
+        public void main_vessel_changed(string save_file)
+        {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter main_vessel_changed(string save_file)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: switching main vessel");
+            
+            ProtoVessel temp_proto;
+            Game loadgame = GamePersistence.LoadGame(save_file, HighLogic.SaveFolder + "/FMRS", false, false);
+
+            if (loadgame != null && loadgame.compatible && loadgame.flightState != null)
+            {
+                temp_proto = loadgame.flightState.protoVessels.Find(p => p.vesselID.ToString() == get_save_value("_SAVE_Main_Vessel"));
+                if (temp_proto != null)
+                {
+                    if (Vessels_dropped.ContainsKey(temp_proto.vesselID))
+                        delete_dropped_vessel(temp_proto.vesselID);
+
+                    Vessels_dropped.Add(temp_proto.vesselID, quicksave_file_name);
+                    Vessels_dropped_names.Add(temp_proto.vesselID, temp_proto.vesselName);
+                    Vessels.Add(temp_proto.vesselID);
+                }
+                else
+                    if (Debug_Active)
+                        Debug.Log("#### FMRS: main vessel not found");
+
+                if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id))
+                    delete_dropped_vessel(FlightGlobals.ActiveVessel.id);
+
+                set_save_value("_SAVE_Main_Vessel", FlightGlobals.ActiveVessel.id.ToString());
+            }
+            else
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: unable to load savefile");
+
+            windowPos.height = 0;
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leaving main_vessel_changed(string save_file)");
         }
     }
 }

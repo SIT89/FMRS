@@ -59,11 +59,11 @@ namespace FMRS
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS On Awake");
-
+            
             if (ToolbarManager.ToolbarAvailable)
             {
-                Toolbar_Button = ToolbarManager.Instance.add("test", "button");//sithilfe werte?
-
+                Toolbar_Button = ToolbarManager.Instance.add("FMRS", "FMRSbutton");
+                
                 if (get_save_value("_SETTING_Enabled") == true.ToString())
                     Toolbar_Button.TexturePath = "FMRS/icon_enabled";
                 else
@@ -88,7 +88,14 @@ namespace FMRS
 
             GameEvents.onLaunch.Add(launch_routine);
 
-            if (get_save_value("_SETTING_Enabled") == true.ToString())
+            if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: ActiveVessel is prelaunch");
+                set_save_value("_SAVE_Has_Closed", false.ToString());
+            }
+
+            if (get_save_value("_SETTING_Enabled") == true.ToString() && get_save_value("_SAVE_Has_Closed") == false.ToString())
             {
                 if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && get_save_value("_SAVE_Has_Launched") != false.ToString())
                     if (get_save_value("_SAVE_Main_Vessel") == FlightGlobals.ActiveVessel.id.ToString())
@@ -114,9 +121,14 @@ namespace FMRS
 
                     timer_active = false;
                     quicksave_file_name = gamesave_name + FlightGlobals.ActiveVessel.currentStage.ToString();
+
                     if (search_for_new_vessels(quicksave_file_name))
                     {
                         GamePersistence.SaveGame(quicksave_file_name, HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
+
+                        if (get_save_value("_SAVE_Main_Vessel") != FlightGlobals.ActiveVessel.id.ToString() && get_save_value("_SAVE_Switched_To_Dropped") == false.ToString())
+                            main_vessel_changed(quicksave_file_name);
+
                         set_save_value(quicksave_file_name, Planetarium.GetUniversalTime().ToString());
                         write_save_values_to_file();
                     }
@@ -160,6 +172,7 @@ namespace FMRS
 
                 Toolbar_Button.TexturePath = "FMRS/icon_disabled";
 
+                set_save_value("_SAVE_Has_Closed", true.ToString());
                 disable_FMRS();
                 delete_dropped_vessels();
 
