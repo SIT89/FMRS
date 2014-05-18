@@ -1,4 +1,4 @@
-Flight Manager for Reusable Stages [FMRS] v0.1.00
+Flight Manager for Reusable Stages [FMRS] v0.1.01
 =================================================
 
 
@@ -43,6 +43,9 @@ Know issues
 Change log
 ============
 
+	v0.1.01
+		fixed an issue, when the controlled command part is not in the same stage as the root part
+	
 	v0.1.00
 		initial release	
 	
