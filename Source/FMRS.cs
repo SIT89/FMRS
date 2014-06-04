@@ -50,12 +50,7 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Awake()
         {
-            if (!File.Exists<FMRS>("save.txt", dummy_vessel))
-                init_save_file();
-            read_save_file();
-
-            if (get_save_value("_SETTING_Version") != mod_version)
-                flush_save_file();
+            load_save_file();
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS On Awake");
@@ -63,8 +58,8 @@ namespace FMRS
             if (ToolbarManager.ToolbarAvailable)
             {
                 Toolbar_Button = ToolbarManager.Instance.add("FMRS", "FMRSbutton");
-                
-                if (get_save_value("_SETTING_Enabled") == true.ToString())
+
+                if (_SETTING_Enabled)
                     Toolbar_Button.TexturePath = "FMRS/icon_enabled";
                 else
                     Toolbar_Button.TexturePath = "FMRS/icon_disabled";
@@ -75,7 +70,7 @@ namespace FMRS
             }
             else
             {
-                set_save_value("_SETTING_Enabled", true.ToString());
+                _SETTING_Enabled = true;
             }
         }
 
@@ -88,16 +83,19 @@ namespace FMRS
 
             GameEvents.onLaunch.Add(launch_routine);
 
+            if (FlightGlobals.activeTarget.Landed && !_SAVE_Has_Launched)
+                _SAVE_Has_Closed = true;
+
             if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
             {
                 if (Debug_Active)
                     Debug.Log("#### FMRS: ActiveVessel is prelaunch");
-                set_save_value("_SAVE_Has_Closed", false.ToString());
+                _SAVE_Has_Closed = false;
             }
 
-            if (get_save_value("_SETTING_Enabled") == true.ToString() && get_save_value("_SAVE_Has_Closed") == false.ToString())
+            if (_SETTING_Enabled && !_SAVE_Has_Closed)
             {
-                if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && get_save_value("_SAVE_Has_Launched") != false.ToString())
+                if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && _SAVE_Has_Launched)
                     if (get_save_value("_SAVE_Main_Vessel") == FlightGlobals.ActiveVessel.id.ToString())
                         GamePersistence.SaveGame("persistent", HighLogic.SaveFolder, SaveMode.OVERWRITE);
 
@@ -144,21 +142,21 @@ namespace FMRS
             if (Debug_Active)
                 Debug.Log("#### FMRS: Toolbar Button Clicked");
 
-            if (get_save_value("_SETTING_Enabled") == true.ToString())
+            if (_SETTING_Enabled)
             {
                 if (Debug_Active)
                     Debug.Log("#### FMRS: disable plugin form toolbar");
 
+                _SETTING_Enabled = false;
+                _SAVE_Has_Closed = true;
+
                 Toolbar_Button.TexturePath = "FMRS/icon_disabled";
 
-                set_save_value("_SAVE_Has_Closed", true.ToString());
-                disable_FMRS();
                 delete_dropped_vessels();
+                disable_FMRS();
 
-                if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value("_SAVE_Main_Vessel") && get_save_value("_SAVE_Has_Launched") == true.ToString())
+                if (FlightGlobals.ActiveVessel.id.ToString() != get_save_value("_SAVE_Main_Vessel") && _SAVE_Has_Launched)
                     jump_to_vessel("Main");
-
-                set_save_value("_SETTING_Enabled", false.ToString());
             }
             else
             {
@@ -166,14 +164,24 @@ namespace FMRS
                     Debug.Log("#### FMRS: enable plugin form toolbar");
 
                 Toolbar_Button.TexturePath = "FMRS/icon_enabled";
-                set_save_value("_SETTING_Enabled", true.ToString());
+                _SETTING_Enabled = true;
 
-
-                if (get_save_value("_SAVE_Has_Launched") == false.ToString() || FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
+                if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
                 {
                     if (Debug_Active)
-                        Debug.Log("#### FMRS: start plugin");
+                        Debug.Log("#### FMRS: start plugin on launchpad");
 
+                    GameEvents.onLaunch.Add(launch_routine);
+                    flight_scene_start_routine();
+                }
+
+                if (FlightGlobals.ActiveVessel.Landed)
+                {
+                    if (Debug_Active)
+                        Debug.Log("#### FMRS: start plugin not on launchpad");
+
+                    reset_n_launchpad = false;
+                    n_launchpad_preflight = true;
                     GameEvents.onLaunch.Add(launch_routine);
                     flight_scene_start_routine();
                 }
@@ -204,21 +212,10 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Awake()
         {
-            if (!File.Exists<FMRS>("save.txt", dummy_vessel))
-                init_save_file();
-            read_save_file();
+            load_save_file();
 
-            if (get_save_value("_SETTING_Version") != mod_version)
-            {
-                flush_save_file();
-            }
-
-            if (get_save_value("_SETTING_Disabled") == false.ToString())
+            if (_SETTING_Enabled)
                 get_dropped_vessels();
-
-            Debug_Active = Convert.ToBoolean(get_save_value("_SETTING_Debug"));
-            if (get_save_value("_SETTING_Debug_Level") == "1" && Debug_Active)
-                Debug_Level_1_Active = true;
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS_Space_Center On Awake");
@@ -238,9 +235,9 @@ namespace FMRS
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS_Space_Center On Start");
 
-            if (Convert.ToBoolean(get_save_value("_SAVE_Has_Recovered")))
+            if (_SAVE_Has_Recovered)
             {
-                set_save_value("_SAVE_Has_Recovered", false.ToString());
+                _SAVE_Has_Recovered = false;
 
                 write_save_values_to_file();
 
