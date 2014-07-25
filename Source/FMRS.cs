@@ -50,11 +50,18 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Awake()
         {
+            Debug.Log("#### FMRS Version: " + mod_version);
+
             load_save_file();
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS On Awake");
-            
+        }
+
+
+/*************************************************************************************************************************/
+        void Start()
+        {
             if (ToolbarManager.ToolbarAvailable)
             {
                 Toolbar_Button = ToolbarManager.Instance.add("FMRS", "FMRSbutton");
@@ -72,12 +79,7 @@ namespace FMRS
             {
                 _SETTING_Enabled = true;
             }
-        }
-
-
-/*************************************************************************************************************************/
-        void Start()
-        {
+            
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: entering Start()");
 
@@ -175,7 +177,9 @@ namespace FMRS
                     flight_scene_start_routine();
                 }
 
-                if (FlightGlobals.ActiveVessel.Landed)
+                if (FlightGlobals.ActiveVessel.Landed && FlightGlobals.ActiveVessel.vesselType != VesselType.EVA 
+                    && FlightGlobals.ActiveVessel.vesselType != VesselType.Debris && FlightGlobals.ActiveVessel.vesselType != VesselType.Flag
+                    && FlightGlobals.ActiveVessel.isCommandable)
                 {
                     if (Debug_Active)
                         Debug.Log("#### FMRS: start plugin not on launchpad");
@@ -212,6 +216,8 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Awake()
         {
+            Debug.Log("#### FMRS Version: " + mod_version);
+
             load_save_file();
 
             if (_SETTING_Enabled)

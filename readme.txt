@@ -1,4 +1,4 @@
-[0.23.5] Flight Manager for Reusable Stages [FMRS] v0.1.03
+[0.24.2] Flight Manager for Reusable Stages [FMRS] v0.1.04
 ==========================================================
 
 
@@ -40,6 +40,8 @@ Known issues
 		I recommend to do all the landings and then switch back to the main mission.
 		Close the plugin and after that go to the tracking station and recover your launch vehicles.
 
+	Recovering your Stages immediately after landing will lead into science and fund loss.
+
 	KSP Bugs
 	Loading nearby vessels in atmosphere.
 	http://bugs.kerbalspaceprogram.com/issues/2429
@@ -49,6 +51,12 @@ Known issues
 
 Change log
 ============
+
+	v0.1.04
+		compiled with 0.24.2 x64
+		reset window appearance modified (current vessel must be commandable and no flag, kerbal or debris)
+		moved toolbar init form Awake() to Start() routine
+		changed convertion of the window postion values
 
 	v0.1.03
 		the plugin now can be reset, to preflight, if the controlled vessel has landed on a surface

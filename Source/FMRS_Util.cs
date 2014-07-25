@@ -34,7 +34,7 @@ namespace FMRS
 {
     public class FMRS_Util : MonoBehaviour
     {
-        public const string mod_version = "v0.1.03";
+        public const string mod_version = "v0.1.04";
         public const string gamesave_name = "FMRS_save";
 
         public List<Guid> Vessels = new List<Guid>();
@@ -98,8 +98,8 @@ namespace FMRS
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: entering write_save_values_to_file()");
 
-            set_save_value("_SETTING_Window_X", windowPos.x.ToString());
-            set_save_value("_SETTING_Window_Y", windowPos.y.ToString());
+            set_save_value("_SETTING_Window_X", Convert.ToInt32(windowPos.x).ToString());
+            set_save_value("_SETTING_Window_Y", Convert.ToInt32(windowPos.y).ToString());
             set_save_value("_SETTING_Armed", armed.ToString());
             set_save_value("_SETTING_Minimized", minimize_window.ToString());
             set_save_value("_SETTING_Enabled", _SETTING_Enabled.ToString());
@@ -313,12 +313,13 @@ namespace FMRS
         public void read_save_file()
         {
             Vessel dummy_vessel = null;
+            double temp_double;
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: enter read_save_file()");
-
-            if (Debug_Active)
-                Debug.Log("#### FMRS: read save file");
+				
+			if (Debug_Active)
+				Debug.Log("#### FMRS: read save file");
 
             Save_File_Content.Clear();
             string[] lines = File.ReadAllLines<FMRS>("save.txt", dummy_vessel);
@@ -328,17 +329,18 @@ namespace FMRS
                 string[] line = lines[i].Split('=');
                 Save_File_Content.Add(line[0].Trim(), line[1].Trim());
             }
+			
+			Debug_Active = Convert.ToBoolean(get_save_value("_SETTING_Debug"));
+			
+			if (Debug_Active)
+				foreach (KeyValuePair<string, string> readvalue in Save_File_Content)
+					Debug.Log(readvalue.Key + "=" + readvalue.Value);
 
-            foreach (KeyValuePair<string, string> readvalue in Save_File_Content)
-            {
-                if (Debug_Active)
-                    Debug.Log(readvalue.Key + "=" + readvalue.Value);
-            }
+            temp_double = Convert.ToDouble(get_save_value("_SETTING_Window_X"));
+            windowPos.x = Convert.ToInt32(temp_double);
+            temp_double = Convert.ToDouble(get_save_value("_SETTING_Window_Y"));
+            windowPos.y = Convert.ToInt32(temp_double);
 
-            windowPos.x = Convert.ToInt32(get_save_value("_SETTING_Window_X"));
-            windowPos.y = Convert.ToInt32(get_save_value("_SETTING_Window_Y"));
-
-            Debug_Active = Convert.ToBoolean(get_save_value("_SETTING_Debug"));
             if (get_save_value("_SETTING_Debug_Level") == "1" && Debug_Active)
                 Debug_Level_1_Active = true;
 
@@ -348,17 +350,9 @@ namespace FMRS
                 Debug_Level_2_Active = true;
             }
 
-            if (get_save_value("_SETTING_Armed") == true.ToString())
-                armed = true;
-            else
-                armed = false;
-            
-            if (get_save_value("_SETTING_Minimized") == true.ToString())
-                minimize_window = true;
-            else
-                minimize_window = false;
+			armed = Convert.ToBoolean(get_save_value("_SETTING_Armed"));
+			minimize_window = Convert.ToBoolean(get_save_value("_SETTING_Minimized"));
             minimize_window_old = minimize_window;
-
             _SETTING_Enabled = Convert.ToBoolean(get_save_value("_SETTING_Enabled"));
             _SAVE_Has_Launched = Convert.ToBoolean(get_save_value("_SAVE_Has_Launched"));
             _SAVE_Has_Closed = Convert.ToBoolean(get_save_value("_SAVE_Has_Closed"));
@@ -422,6 +416,7 @@ namespace FMRS
 
             if (get_save_value("_SETTING_Version") != mod_version)
             {
+				Debug.Log("#### FMRS: flush save file");
                 flush_save_file();
             }
         }
