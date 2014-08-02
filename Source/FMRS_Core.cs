@@ -29,145 +29,115 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 using KSP.IO;
+using Contracts;
 
 
 namespace FMRS
 {
     public class FMRS_Core : FMRS_Util
     {
-        public double Timer_Trigger;
-        public bool timer_active;
-        public double Timer_Delay = 1;
+        public struct science_data_sent
+        {
+            public string id;
+            public float amount;
+        }
+        
+        private string version_number = "v0.2.00";
+        public double Timer_Trigger, Timer_Trigger_Start_Delay;
+        public bool timer_active = false, timer_delay_active = false;
+        public double Timer_Delay = 0.2, Timer_Start_Delay = 2;
         public string quicksave_file_name;
         public Guid destr_vessel_id;
         public bool undocked_vessel, staged_vessel;
         public bool reset_n_launchpad = false, n_launchpad_preflight = false;
         public bool main_ui_active = false, reset_ui_active = false;
-        bool scrollbar_enable = false, n_scrollbar = false;
-        bool reset_window_size;
-        int nr_save_files = 0;
+        public bool show_setting = false;
+        private int nr_save_files = 0;
         public Vector2 scroll_Vector = Vector2.zero;
+        GUISkin mySkin = new GUISkin();
+        GUIStyle button_main, button_green, button_red, button_yellow, button_small, button_small_red, button_big;
+        GUIStyle text_main, text_green, text_cyan, text_red, text_yellow, text_heading;
+        GUIStyle area_style, scrollbar_stlye;
+        private bool skin_init = false;
+        private List<science_data_sent> science_sent = new List<science_data_sent>();
+        private float current_rep, last_rep_change;
+        private Dictionary<string, float> killed_kerbals = new Dictionary<string, float>();
+        
+
+/*************************************************************************************************************************/
+        public void drawMainGUI()
+        {
+            if (!skin_init)
+                init_skin();
+            GUI.skin = mySkin;
+            windowPos = GUILayout.Window(1, windowPos, MainGUI, "FMRS " + mod_vers, GUILayout.MinWidth(100));
+            windowPos.x = Mathf.Clamp(windowPos.x, 0, Screen.width - windowPos.width);
+            windowPos.y = Mathf.Clamp(windowPos.y, 0, Screen.height - windowPos.height);
+        }
 
 
 /*************************************************************************************************************************/
         public void MainGUI(int windowID)
-        {
+        {      
             List<string> save_files = new List<string>();
             Vessel temp_vessel;
             string temp_string;
+            Guid guid_delete_vessel = FlightGlobals.ActiveVessel.id;
+            bool delete_vessel = false;
+            float scrollbar_size;
+            bool scrollbar_enable = false;
+            float window_height, window_width;
 
-            GUIStyle Button_Style_Main = new GUIStyle(GUI.skin.button);
-            Button_Style_Main.normal.textColor = Button_Style_Main.focused.textColor = Color.white;
-            Button_Style_Main.hover.textColor = Button_Style_Main.active.textColor = Color.yellow;
-            Button_Style_Main.onNormal.textColor = Button_Style_Main.onFocused.textColor = Button_Style_Main.onHover.textColor = Button_Style_Main.onActive.textColor = Color.green;
-            Button_Style_Main.padding = new RectOffset(8, 4, 4, 4);
-            Button_Style_Main.alignment = TextAnchor.MiddleLeft;
-
-            GUIStyle Button_Style_Landed = new GUIStyle(Button_Style_Main);
-            Button_Style_Landed.normal.textColor = Button_Style_Landed.focused.textColor = Color.green;
-
-            GUIStyle Button_Style_Destroyed = new GUIStyle(Button_Style_Main);
-            Button_Style_Destroyed.normal.textColor = Button_Style_Destroyed.focused.textColor = Color.red;
-
-            GUIStyle Button_Style_Small = new GUIStyle(Button_Style_Main);
-            Button_Style_Small.padding = new RectOffset(3, 4, 4, 4);
-            Button_Style_Small.alignment = TextAnchor.MiddleCenter;
-
-            GUIStyle Button_Style_Big = new GUIStyle(Button_Style_Main);
-            Button_Style_Big.padding = new RectOffset(8, 8, 8, 8);
-            Button_Style_Big.alignment = TextAnchor.MiddleCenter;
-
-            GUIStyle Button_Style_Controll = new GUIStyle(Button_Style_Main);
-            Button_Style_Controll.normal.textColor = Button_Style_Controll.focused.textColor = Color.yellow;
-
-            GUIStyle Text_Style_Main = new GUIStyle(GUI.skin.textArea);
-            Text_Style_Main.padding = new RectOffset(4, 4, 8, 8);
-
-            GUIStyle Text_Style_Landed = new GUIStyle(Text_Style_Main);
-            Text_Style_Landed.normal.textColor = Color.green;
-            Text_Style_Landed.padding = new RectOffset(4, 4, 5, 5);
-
-            GUIStyle Text_Style_Destroyed = new GUIStyle(Text_Style_Main);
-            Text_Style_Destroyed.normal.textColor = Color.red;
-            Text_Style_Destroyed.padding = new RectOffset(4, 4, 5, 5);
-
-            GUIStyle Text_Style_Controlling = new GUIStyle(Text_Style_Main);
-            Text_Style_Controlling.normal.textColor = Color.yellow;
-            Text_Style_Landed.padding = new RectOffset(4, 4, 5, 5);
-
-            GUIStyle Text_Style_Heading = new GUIStyle(Text_Style_Main);
-            Text_Style_Heading.fontStyle = FontStyle.Bold;
-            Text_Style_Heading.fontSize = 16;
-            Text_Style_Heading.alignment = TextAnchor.MiddleCenter;
-
-            GUIStyle areaStyle = new GUIStyle(HighLogic.Skin.textArea);
-            areaStyle.active = areaStyle.hover = areaStyle.normal;
+            window_height = 60;
+            window_width = 280;
 
             GUILayout.BeginVertical();
 
             GUILayout.BeginHorizontal();
 
-            if (nr_save_files > 0 && windowPos.height > 450)
-                scrollbar_enable = true;
-            else
-                scrollbar_enable = false;
-
-            if (nr_save_files > 0 && !scrollbar_enable)
-                n_scrollbar = true;
-            else
-                n_scrollbar = false;
-
-            if(reset_window_size)
-            {
-                windowPos.height = 0;
-                windowPos.width = 0;
-                reset_window_size = false;
-            }
-
             if (!minimize_window)
             {
                 if (_SAVE_Has_Launched)
-                    GUILayout.Box("Mission Time: " + get_time_string(Planetarium.GetUniversalTime() - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(260));
+                    GUILayout.Box("Mission Time: " + get_time_string(Planetarium.GetUniversalTime() - Convert.ToDouble(get_save_value(save_cat.SAVE,"Launched_At"))), text_main, GUILayout.Width(188));
                 else
-                    GUILayout.Box("Mission Time: " + get_time_string(0), Text_Style_Main, GUILayout.Width(210));
+                    GUILayout.Box("Mission Time: " + "00:00", text_main, GUILayout.Width(137));
             }
+            else
+                GUILayout.Space(5);
 
             if (armed)
                 temp_string = "Armed";
             else
                 temp_string = "Arm";
-
+  
             if (!_SAVE_Has_Launched)
-                armed = GUILayout.Toggle(armed, temp_string, Button_Style_Small, GUILayout.Width(50));
+                armed = GUILayout.Toggle(armed, temp_string, button_small, GUILayout.Width(50));
             else
                 if (minimize_window)
-                    GUILayout.Box("Flight", Text_Style_Main, GUILayout.Width(50));
+                    GUILayout.Box("Flight", text_main, GUILayout.Width(50));
 
-            minimize_window = GUILayout.Toggle(minimize_window, "_", Button_Style_Small, GUILayout.Width(25));
-            really_close = GUILayout.Toggle(really_close, "X", Button_Style_Small, GUILayout.Width(25));
+            if (!minimize_window)
+                show_setting = GUILayout.Toggle(show_setting, "s", button_small, GUILayout.Width(25));
+            
+            minimize_window = GUILayout.Toggle(minimize_window, "_", button_small, GUILayout.Width(25));
+            if (really_close && minimize_window)
+                really_close = false;
+
+            if(!minimize_window)
+                really_close = GUILayout.Toggle(really_close, "x", button_small, GUILayout.Width(25));
+            else
+                window_width = 105;
 
             GUILayout.EndHorizontal();
 
-            if (minimize_window != minimize_window_old)
-            {
-                minimize_window_old = minimize_window;
-                reset_window_size = true;
-            }
-
-            if (really_close != really_close_old)
-            {
-                really_close_old = really_close;
-                reset_window_size = true;
-            }
-
             if (really_close)
             {
-                GUILayout.Space(10);
-                GUILayout.Box("Close Really?", Text_Style_Heading, GUILayout.Width(310));
+                GUILayout.Space(5);
+                window_height += 5;
 
+                GUILayout.Box("Close?", text_heading, GUILayout.Width(266));
                 GUILayout.BeginHorizontal();
-
-                if (GUILayout.Button("YES", Button_Style_Big, GUILayout.Width(155)))
+                if (GUILayout.Button("YES", button_big, GUILayout.Width(132)))
                 {
                     if (Debug_Active)
                         Debug.Log("#### FMRS: close FMRS from UI");
@@ -176,195 +146,231 @@ namespace FMRS
                     _SAVE_Has_Closed = true;
 
                     if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && _SAVE_Has_Launched &&
-                        FlightGlobals.ActiveVessel.id.ToString() != get_save_value("_SAVE_Main_Vessel") && !n_launchpad_preflight)
+                        FlightGlobals.ActiveVessel.id.ToString() != get_save_value(save_cat.SAVE,"Main_Vessel") && !n_launchpad_preflight)
                         jump_to_vessel("Main");
                     
                     disable_FMRS();
                 }
-                if (GUILayout.Button("NO", Button_Style_Big, GUILayout.Width(155)))
+                if (GUILayout.Button("NO", button_big, GUILayout.Width(133)))
                     really_close = false;
 
                 GUILayout.EndHorizontal();
+                window_height += 58;
             }
 
-            if (really_close == false && minimize_window == false)
+            if (really_close == false && minimize_window == false && show_setting == true)
+            {
+                GUILayout.Space(5);
+                window_height += 5;
+                GUILayout.BeginVertical(area_style, GUILayout.Width(266));
+                GUILayout.Space(95);
+                _SETTING_Auto_Cut_Off = GUI.Toggle(new Rect(5, 65, 25, 25), _SETTING_Auto_Cut_Off, "Auto Cut Off Engines");
+                _SETTING_Auto_Recover = GUI.Toggle(new Rect(5, 95, 25, 25), _SETTING_Auto_Recover, "Auto Recover Landed Crafts");
+                Debug_Active = GUI.Toggle(new Rect(5, 125, 25, 25), Debug_Active, "write debug messages to log file");
+                GUILayout.EndVertical();
+                window_height += 102;                
+            }
+
+            if (really_close == false && minimize_window == false && show_setting == false)
             {
                 if (Vessels_dropped.Count > 0)
                 {
-                    GUILayout.Space(10);
-                    GUILayout.Box("Separated Stages:", Text_Style_Heading, GUILayout.Width(310));
-                }
-
-                foreach (KeyValuePair<Guid, string> temp_keyvalue in Vessels_dropped)
-                {
-                    if (!save_files.Contains(temp_keyvalue.Value))
-                        save_files.Add(temp_keyvalue.Value);
-                }
-
-                save_files.Sort(delegate(string x, string y)
-                {
-                    return get_save_value(y).CompareTo(get_save_value(x));
-                });
-
-                nr_save_files = save_files.Count;
-
-                if (scrollbar_enable)
-                {
-                    scroll_Vector = GUILayout.BeginScrollView(scroll_Vector, GUILayout.Width(310), GUILayout.Height(300));
-                    GUILayout.BeginVertical();
-                }
-
-                if (n_scrollbar)
-                    GUILayout.BeginVertical(areaStyle, GUILayout.Width(310));
-
-                while (save_files.Count != 0)
-                {
                     GUILayout.Space(5);
-                    GUILayout.BeginVertical(areaStyle);
-                    if(save_files.Last().Contains("_undocked_"))
-                        GUILayout.Box("Undocked at " + get_time_string(Convert.ToDouble(get_save_value(save_files.Last())) - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(220));
-                    else if (save_files.Last().Contains("_separated_"))
-                        GUILayout.Box("Separated at " + get_time_string(Convert.ToDouble(get_save_value(save_files.Last())) - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(220));
-                    else
-                        GUILayout.Box("Stage " + save_files.Last().Substring(9) + " separated at " + get_time_string(Convert.ToDouble(get_save_value(save_files.Last())) - Convert.ToDouble(get_save_value("_SAVE_Launched_At"))), Text_Style_Main, GUILayout.Width(220));
+                    window_height += 5;
 
-                    foreach (KeyValuePair<Guid, string> vessel_in_savefile in Vessels_dropped)
+                    GUILayout.Box("Separated Stages:", text_heading, GUILayout.Width(266));
+                    window_height += 33;
+
+                    foreach (KeyValuePair<Guid, string> temp_keyvalue in Vessels_dropped)
                     {
-                        if (vessel_in_savefile.Value == save_files.Last())
+                        if (!save_files.Contains(temp_keyvalue.Value))
+                            save_files.Add(temp_keyvalue.Value);
+                    }
+
+                    save_files.Sort(delegate(string x, string y)
+                    {
+                        return get_save_value(save_cat.SAVEFILE, y).CompareTo(get_save_value(save_cat.SAVEFILE, x));
+                    });
+
+                    nr_save_files = save_files.Count;
+
+                    scrollbar_size = nr_save_files * 61;
+                    scrollbar_size += (Vessels_dropped.Count - nr_save_files) * 25;
+                    if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id) || Vessels_dropped.ContainsKey(destr_vessel_id))
+                        scrollbar_size += 43;
+
+                    if (scrollbar_size > 300)
+                    {
+                        scrollbar_enable = true;
+                        scroll_Vector = GUILayout.BeginScrollView(scroll_Vector, scrollbar_stlye, GUILayout.Width(266), GUILayout.Height(300));
+                        GUILayout.BeginVertical();
+                        window_height += 295;
+                    }
+                    else
+                    {
+                        GUILayout.BeginVertical(area_style, GUILayout.Width(266));
+                        window_height += scrollbar_size;
+                    }
+
+                    while (save_files.Count != 0)
+                    {
+                        GUILayout.Space(5);
+                        GUILayout.BeginVertical(area_style);
+                        if (save_files.Last().Contains("_undocked_"))
+                            GUILayout.Box("Undocked at " + get_time_string(Convert.ToDouble(get_save_value(save_cat.SAVEFILE, save_files.Last())) - Convert.ToDouble(get_save_value(save_cat.SAVE, "Launched_At"))), text_main, GUILayout.Width(230));
+                        else if (save_files.Last().Contains("_separated_"))
+                            GUILayout.Box("Separated at " + get_time_string(Convert.ToDouble(get_save_value(save_cat.SAVEFILE, save_files.Last())) - Convert.ToDouble(get_save_value(save_cat.SAVE, "Launched_At"))), text_main, GUILayout.Width(230));
+                        else
+                            GUILayout.Box("Stage " + save_files.Last().Substring(9) + " separated at " + get_time_string(Convert.ToDouble(get_save_value(save_cat.SAVEFILE, save_files.Last())) - Convert.ToDouble(get_save_value(save_cat.SAVE, "Launched_At"))), text_main, GUILayout.Width(230));
+
+                        foreach (KeyValuePair<Guid, string> vessel_in_savefile in Vessels_dropped)
                         {
-                            GUILayout.BeginHorizontal();
-                            if (Vessels_dropped_landed.ContainsKey(vessel_in_savefile.Key))
+                            if (vessel_in_savefile.Value == save_files.Last())
                             {
-                                GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", Text_Style_Landed, GUILayout.Width(220));
-                            }
-                            else if (vessel_in_savefile.Key == FlightGlobals.ActiveVessel.id || vessel_in_savefile.Key == destr_vessel_id)
-                            {
-                                GUILayout.EndHorizontal();
-                                GUILayout.BeginVertical(areaStyle);
-
-                                if (Vessels_dropped_destroyed.ContainsKey(vessel_in_savefile.Key))
-                                {
-                                    GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " destroyed", Text_Style_Destroyed, GUILayout.Width(220));
-                                }
-                                else if (FlightGlobals.ActiveVessel.LandedOrSplashed)
-                                {
-                                    GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", Text_Style_Landed, GUILayout.Width(220));
-                                }
-                                else
-                                {
-                                    GUILayout.Box("controlling: " + Vessels_dropped_names[vessel_in_savefile.Key], Text_Style_Controlling, GUILayout.Width(220));
-                                }
-                                if (GUILayout.Button("Jump back to Separation", Button_Style_Main, GUILayout.Width(225)))
-                                    jump_to_vessel(vessel_in_savefile.Key, false);
-
-                                GUILayout.EndVertical();
                                 GUILayout.BeginHorizontal();
-                            }
-                            else if (Vessels_dropped_destroyed.ContainsKey(vessel_in_savefile.Key))
-                            {
-                                GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " damaged", Text_Style_Destroyed, GUILayout.Width(225));
-                            }
-                            else
-                            {
-                                temp_vessel = FlightGlobals.Vessels.Find(p => p.id == vessel_in_savefile.Key);
-
-                                if (temp_vessel == null)
+                                if (Vessels_dropped_recovered.ContainsKey(vessel_in_savefile.Key))
                                 {
-                                    if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key], Button_Style_Main, GUILayout.Width(220)))
-                                        jump_to_vessel(vessel_in_savefile.Key, true);
+                                    GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " recovered", text_cyan, GUILayout.Width(205));
                                 }
-                                else
+                                else if (Vessels_dropped_landed.ContainsKey(vessel_in_savefile.Key))
                                 {
-                                    if (temp_vessel.loaded && FlightGlobals.ActiveVessel.id.ToString() != get_save_value("_SAVE_Main_Vessel"))
+                                    GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", text_green, GUILayout.Width(205));
+                                }
+                                else if (vessel_in_savefile.Key == FlightGlobals.ActiveVessel.id || vessel_in_savefile.Key == destr_vessel_id)
+                                {
+                                    GUILayout.EndHorizontal();
+                                    GUILayout.Space(5);
+                                    GUILayout.BeginVertical(area_style, GUILayout.Width(230));
+
+                                    if (Vessels_dropped_destroyed.ContainsKey(vessel_in_savefile.Key))
                                     {
-                                        if (temp_vessel.LandedOrSplashed)
-                                        {
-                                            if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", Button_Style_Landed, GUILayout.Width(220)))
-                                                FlightGlobals.ForceSetActiveVessel(temp_vessel);
-                                        }
-                                        else
-                                        {
-                                            if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key] + " is near", Button_Style_Controll, GUILayout.Width(220)))
-                                                FlightGlobals.ForceSetActiveVessel(temp_vessel);
-                                        }
+                                        GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " destroyed", text_red, GUILayout.Width(222));
+                                    }
+                                    else if (FlightGlobals.ActiveVessel.LandedOrSplashed)
+                                    {
+                                        GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", text_green, GUILayout.Width(222));
                                     }
                                     else
                                     {
-                                        if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key], Button_Style_Main, GUILayout.Width(220)))
+                                        GUILayout.Box("contr.: " + Vessels_dropped_names[vessel_in_savefile.Key], text_yellow, GUILayout.Width(222));
+                                    }
+                                    if (GUILayout.Button("Jump back to Separation", button_main, GUILayout.Width(222)))
+                                        jump_to_vessel(vessel_in_savefile.Key, false);
+
+                                    GUILayout.EndVertical();
+                                    GUILayout.Space(5);
+                                    GUILayout.BeginHorizontal();
+                                }
+                                else if (Vessels_dropped_destroyed.ContainsKey(vessel_in_savefile.Key))
+                                {
+                                    GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " damaged", text_red, GUILayout.Width(205));
+                                }
+                                else
+                                {
+                                    temp_vessel = FlightGlobals.Vessels.Find(p => p.id == vessel_in_savefile.Key);
+
+                                    if (temp_vessel == null)
+                                    {
+                                        if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key], button_main, GUILayout.Width(205)))
                                             jump_to_vessel(vessel_in_savefile.Key, true);
                                     }
+                                    else
+                                    {
+                                        if (temp_vessel.loaded && FlightGlobals.ActiveVessel.id.ToString() != get_save_value(save_cat.SAVE, "Main_Vessel"))
+                                        {
+                                            if (temp_vessel.LandedOrSplashed)
+                                            {
+                                                if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", button_green, GUILayout.Width(205)))
+                                                    FlightGlobals.ForceSetActiveVessel(temp_vessel);
+                                            }
+                                            else
+                                            {
+                                                if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key] + " is near", button_yellow, GUILayout.Width(205)))
+                                                    FlightGlobals.ForceSetActiveVessel(temp_vessel);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            if (GUILayout.Button(Vessels_dropped_names[vessel_in_savefile.Key], button_main, GUILayout.Width(205)))
+                                                jump_to_vessel(vessel_in_savefile.Key, true);
+                                        }
+                                    }
                                 }
-                            }
 
-                            if (vessel_in_savefile.Key != FlightGlobals.ActiveVessel.id && vessel_in_savefile.Key != destr_vessel_id)
-                            {
-                                Button_Style_Small.normal.textColor = Button_Style_Small.focused.textColor = Color.red;
-                                if (GUILayout.Button("X", Button_Style_Small, GUILayout.Width(25)))
+                                if (vessel_in_savefile.Key != FlightGlobals.ActiveVessel.id && vessel_in_savefile.Key != destr_vessel_id)
                                 {
-                                    save_landed_vessel();
-                                    delete_dropped_vessel(vessel_in_savefile.Key);
-                                    reset_window_size = true;
+                                    if (GUILayout.Button("X", button_small_red, GUILayout.Width(25)))
+                                    {
+                                        guid_delete_vessel = vessel_in_savefile.Key;
+                                        delete_vessel = true;
+                                    }
                                 }
+                                GUILayout.EndHorizontal();
+                                button_main.normal.textColor = button_main.focused.textColor = Color.white;
                             }
-
-                            GUILayout.EndHorizontal();
-                            Button_Style_Main.normal.textColor = Button_Style_Main.focused.textColor = Color.white;
                         }
+                        GUILayout.EndVertical();
+                        temp_string = save_files.Last();
+                        save_files.Remove(temp_string);
                     }
-                    GUILayout.EndVertical();
-                    temp_string = save_files.Last();
-                    save_files.Remove(temp_string);
+
+                    if (scrollbar_enable)
+                    {
+                        GUILayout.EndVertical();
+                        GUILayout.EndScrollView();
+                    }
+                    else
+                        GUILayout.EndVertical();
                 }
 
-                if (scrollbar_enable)
+                if (_SAVE_Switched_To_Dropped)
                 {
-                    GUILayout.EndVertical();
-                    GUILayout.EndScrollView();
-                }
-
-                if (n_scrollbar)
-                    GUILayout.EndVertical();
-
-                GUILayout.Space(5);
-
-                if ((get_save_value("_SAVE_Main_Vessel") != FlightGlobals.ActiveVessel.id.ToString()))
-                {
-
-                    if (GUILayout.Button("Jump back to Main Mission", Button_Style_Big, GUILayout.Width(310)))
+                    GUILayout.Space(5);
+                    window_height += 5;
+                    if (GUILayout.Button("Jump back to Main Mission", button_big, GUILayout.Width(266)))
                     {
                         jump_to_vessel("Main");
                     }
+                    window_height += 31;
                 }
 
-                if (_SAVE_Has_Launched)
+                if (_SAVE_Has_Launched && _SETTING_Can_Restart)
                 {
-                    if (revert_to_launch != revert_to_launch_old)
-                    {
-                        revert_to_launch_old = revert_to_launch;
-                        reset_window_size = true;
-                    }
+                    GUILayout.Space(5);
+                    window_height += 5;
 
                     if (revert_to_launch)
-                    {
-                        GUILayout.Box("Really?", Text_Style_Heading, GUILayout.Width(310));
+                    { 
+                        GUILayout.Box("Revert Flight?", text_heading, GUILayout.Width(266));
 
                         GUILayout.BeginHorizontal();
 
-                        if (GUILayout.Button("YES", Button_Style_Big, GUILayout.Width(155)))
+                        if (GUILayout.Button("YES", button_big, GUILayout.Width(132)))
                         {
-                            jump_to_vessel(get_save_value("_SAVE_Main_Vessel"), "before_launch");
+                            _SAVE_Has_Closed = true;
+                            jump_to_vessel(get_save_value(save_cat.SAVE, "Main_Vessel"), "before_launch");
                         }
-                        if (GUILayout.Button("NO", Button_Style_Big, GUILayout.Width(155)))
+                        if (GUILayout.Button("NO", button_big, GUILayout.Width(133)))
                             revert_to_launch = false;
 
                         GUILayout.EndHorizontal();
+                        window_height += 58;
                     }
                     else
-                        revert_to_launch = GUILayout.Toggle(revert_to_launch, "Revert To Launch", Button_Style_Big, GUILayout.Width(310));
+                    {
+                        revert_to_launch = GUILayout.Toggle(revert_to_launch, "Revert To Launch", button_big, GUILayout.Width(266));
+                        window_height += 31;
+                    }
                 }
             }
-
             GUILayout.EndVertical();
+
+            if(delete_vessel && guid_delete_vessel != FlightGlobals.ActiveVessel.id)
+                delete_dropped_vessel(guid_delete_vessel);
+
+            windowPos.height = window_height;
+            windowPos.width = window_width;
+
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
         }
 
@@ -393,12 +399,17 @@ namespace FMRS
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: entering launch_routine(EventReport event_imput)");
 
+            if (Debug_Active)
+                Debug.Log("#### FMRS: LAUNCH");
+
             if (!_SAVE_Has_Launched)
             {
                 _SAVE_Has_Launched = true;
-                set_save_value("_SAVE_Launched_At", Planetarium.GetUniversalTime().ToString());
+                set_save_value(save_cat.SAVE, "Launched_At", Planetarium.GetUniversalTime().ToString());
+                fill_Vessels_list();
+                GameEvents.onStageSeparation.Add(staging_routine);
+                GameEvents.onVesselCreate.Add(vessel_create_routine);
             }
-
 
             if (!armed)
             {
@@ -406,10 +417,6 @@ namespace FMRS
                 disable_FMRS();
                 return;
             }
-
-            reset_window_size = true;
-
-            write_save_values_to_file();
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving launch_routine(EventReport event_imput)");
@@ -440,16 +447,42 @@ namespace FMRS
 /*************************************************************************************************************************/
         public bool search_for_new_vessels(string save_file_name)
         {
-            bool new_vessel_found = false;
+            bool new_vessel_found = false, controllable = false;
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: entering search_for_new_vessels(string save_file_name)");
 
             foreach (Vessel temp_vessel in FlightGlobals.Vessels)
             {
+                controllable = false;
+
                 if (!Vessels.Contains(temp_vessel.id))
                 {
-                    if (temp_vessel.isCommandable && temp_vessel.vesselType != VesselType.EVA && temp_vessel.vesselType != VesselType.Flag && temp_vessel.vesselType != VesselType.Debris && temp_vessel.vesselType != VesselType.SpaceObject && temp_vessel.vesselType != VesselType.Unknown)
+                    if (temp_vessel.isCommandable &&
+                        temp_vessel.IsControllable &&
+                        temp_vessel.vesselType != VesselType.EVA &&
+                        temp_vessel.vesselType != VesselType.Flag &&
+                        temp_vessel.vesselType != VesselType.SpaceObject &&
+                        temp_vessel.vesselType != VesselType.Unknown)
+
+                        controllable = true;
+                    else
+                    {
+                        foreach (ProtoPartSnapshot proto_part in temp_vessel.protoVessel.protoPartSnapshots)
+                        {
+                            List<ProtoPartModuleSnapshot> proto_modules = proto_part.modules;
+                            ProtoPartModuleSnapshot module = null;
+
+                            if (proto_modules != null)
+                            {
+                                module = proto_part.modules.Find(p => p.moduleName == "RealChuteModule");
+                                if (module != null)
+                                    controllable = true;
+                            }
+                        }
+                    }
+
+                    if(controllable)
                     {
                         if (Debug_Active)
                             Debug.Log("#### FMRS: " + temp_vessel.vesselName + " Found and will be added to the dicts");
@@ -457,6 +490,8 @@ namespace FMRS
                         Vessels_dropped.Add(temp_vessel.id, save_file_name);
                         Vessels_dropped_names.Add(temp_vessel.id, temp_vessel.vesselName);
                         new_vessel_found = true;
+                        if (_SETTING_Auto_Cut_Off)
+                            temp_vessel.ctrlState.mainThrottle = 0;
                     }
                     Vessels.Add(temp_vessel.id);
                 }
@@ -495,14 +530,6 @@ namespace FMRS
 
 
 /*************************************************************************************************************************/
-        public void drawMainGUI()
-        {
-            GUI.skin = HighLogic.Skin;
-            windowPos = GUILayout.Window(1, windowPos, MainGUI, "FMRS " + mod_version, GUILayout.MinWidth(100), GUILayout.MaxHeight(460));
-        }
-
-
-/*************************************************************************************************************************/
         public void jump_to_vessel(Guid vessel_id, bool save_landed)
         {
             int load_vessel;
@@ -515,19 +542,19 @@ namespace FMRS
 
             if (save_landed)
             {
-                if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value("_SAVE_Main_Vessel"))
+                if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"))
                 {
                     GamePersistence.SaveGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
                 }
-                save_landed_vessel();
+                save_landed_vessel(true);
             }
 
-            Game loadgame = GamePersistence.LoadGame(get_save_value(vessel_id.ToString()), HighLogic.SaveFolder + "/FMRS", false, false);
+            Game loadgame = GamePersistence.LoadGame(get_save_value(save_cat.DROPPED, vessel_id.ToString()), HighLogic.SaveFolder + "/FMRS", false, false);
 
             if (loadgame != null && loadgame.compatible && loadgame.flightState != null)
             {
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: try to laod gamefile " + get_save_value(vessel_id.ToString()));
+                    Debug.Log("#### FMRS: try to laod gamefile " + get_save_value(save_cat.DROPPED, vessel_id.ToString()));
 
                 for (load_vessel = 0; load_vessel < loadgame.flightState.protoVessels.Count && loadgame.flightState.protoVessels[load_vessel].vesselID != vessel_id; load_vessel++) ;
                 if (load_vessel <= loadgame.flightState.protoVessels.Count)
@@ -535,13 +562,12 @@ namespace FMRS
                     if (Debug_Active)
                         Debug.Log("#### FMRS: FMRS_save found, Vessel found, try to start");
 
-                    _SAVE_Switched_To_Dropped = true;
                     FlightDriver.StartAndFocusVessel(loadgame, load_vessel);
                 }
             }
             else
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: Loading gamefile " + get_save_value(vessel_id.ToString()));
+                    Debug.Log("#### FMRS: Loading gamefile " + get_save_value(save_cat.DROPPED, vessel_id.ToString()));
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving jump_to_vessel(Guid vessel_id)");
@@ -559,10 +585,10 @@ namespace FMRS
             if (Debug_Active)
                 Debug.Log("#### FMRS: Jump to Main");
 
-            if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value("_SAVE_Main_Vessel"))
+            if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"))
                 return;
 
-            save_landed_vessel();
+            save_landed_vessel(true);
 
             loadgame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", false, false);
 
@@ -571,12 +597,11 @@ namespace FMRS
                 if (Debug_Active)
                     Debug.Log("#### FMRS: try to load gamefile FMRS_main_save");
 
-                for (load_vessel = 0; load_vessel <= loadgame.flightState.protoVessels.Count && loadgame.flightState.protoVessels[load_vessel].vesselID.ToString() != get_save_value("_SAVE_Main_Vessel"); load_vessel++) ;
+                for (load_vessel = 0; load_vessel <= loadgame.flightState.protoVessels.Count && loadgame.flightState.protoVessels[load_vessel].vesselID.ToString() != get_save_value(save_cat.SAVE, "Main_Vessel"); load_vessel++) ;
                 if (load_vessel <= loadgame.flightState.protoVessels.Count)
                 {
                     if (Debug_Active)
                         Debug.Log("#### FMRS: FMRS_main_save found, main vessel found, try to start");
-                    _SAVE_Switched_To_Dropped = false;
                     FlightDriver.StartAndFocusVessel(loadgame, load_vessel);
                 }
                 else
@@ -623,21 +648,30 @@ namespace FMRS
 
 
 /*************************************************************************************************************************/
-        public void save_landed_vessel()
+        public void save_landed_vessel(bool auto_recover_allowed)
         {
             Game loadgame, savegame;
             ProtoVessel temp_proto;
             List<Vessel> vessel_list = new List<Vessel>();
+            string message = "";
 
             if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: entering save_landed_vessel()");
+                Debug.Log("#### FMRS: entering save_landed_vessel(bool auto_recover_allowed)");
+
+            foreach (KeyValuePair<string, float> keyvalue in killed_kerbals)
+            {
+                set_recoverd_value("kerbal", "kill", keyvalue.Value.ToString());
+                message += keyvalue.Key + " killed: " + keyvalue.Value.ToString() + " Reputation@";
+            }
+            if (message != "")
+                set_recoverd_value("message", "FMRS: Kerbal Killed", message);
 
             if (FlightGlobals.ActiveVessel.LandedOrSplashed)
             {
                 if (Debug_Active)
                     Debug.Log("#### FMRS: active vessel has landed, splashed down or has been destroyed");
 
-                if (FlightGlobals.ActiveVessel.id.ToString() != get_save_value("_SAVE_Main_Vessel"))
+                if (FlightGlobals.ActiveVessel.id.ToString() != get_save_value(save_cat.SAVE, "Main_Vessel"))
                 {
                     if (Debug_Active)
                         Debug.Log("#### FMRS: vessel is not main vessel");
@@ -704,10 +738,14 @@ namespace FMRS
                             if (savegame.flightState.protoVessels.Contains(temp_proto))
                                 savegame.flightState.protoVessels.Remove(temp_proto);
 
-                            savegame.flightState.protoVessels.Add(temp_proto);
+                            if (_SETTING_Auto_Recover && auto_recover_allowed)
+                                savegame = recover_vessel(vessel_id, loadgame, savegame);
+                            else
+                                savegame.flightState.protoVessels.Add(temp_proto);
                         });
                         GamePersistence.SaveGame(savegame, "FMRS_main_save", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
                         GamePersistence.SaveGame(savegame, "persistent", HighLogic.SaveFolder, SaveMode.OVERWRITE);
+
                     }
                 }
             }
@@ -715,7 +753,7 @@ namespace FMRS
             write_save_values_to_file();
 
             if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: leaving save_landed_vessel()");
+                Debug.Log("#### FMRS: leaving save_landed_vessel(bool auto_recover_allowed)");
         }
 
 
@@ -752,74 +790,6 @@ namespace FMRS
 
 
 /*************************************************************************************************************************/
-        public void delete_dropped_vessels()
-        {
-            List<string> temp_list = new List<string>();
-            int values_removed = 0;
-
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: entering delete_dropped_vessels()");
-
-            foreach (KeyValuePair<string, string> temp_key_pair in Save_File_Content)
-            {
-                if ((!temp_key_pair.Key.Contains("_SETTING_")) && (!temp_key_pair.Key.Contains("_SAVE_")))
-                {
-                    temp_list.Add(temp_key_pair.Key);
-                    values_removed++;
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: " + temp_key_pair.Key.ToString() + " deleted");
-                }
-            }
-            temp_list.ForEach(delegate(string temp_string) { Save_File_Content.Remove(temp_string); });
-            Vessels_dropped.Clear();
-            Vessels_dropped_names.Clear();
-            Vessels_dropped_landed.Clear();
-            Vessels_dropped_destroyed.Clear();
-            write_save_values_to_file(values_removed);
-
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: leaving delete_dropped_vessels()");
-        }
-
-
-/*************************************************************************************************************************/
-        public void delete_dropped_vessel(Guid vessel_guid)
-        {
-            List<string> temp_list = new List<string>();
-            int values_removed = 0;
-
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: entering delete_dropped_vessel(Guid vessel_guid)");
-
-            if (Debug_Active)
-                Debug.Log("#### FMRS: remove vessel" + vessel_guid.ToString() + Vessels_dropped_names[vessel_guid]);
-
-            Vessels_dropped.Remove(vessel_guid);
-            Vessels_dropped_names.Remove(vessel_guid);
-            if (Vessels_dropped_landed.ContainsKey(vessel_guid))
-                Vessels_dropped_landed.Remove(vessel_guid);
-            if (Vessels_dropped_destroyed.ContainsKey(vessel_guid))
-                Vessels_dropped_destroyed.Remove(vessel_guid);
-
-            foreach (KeyValuePair<string, string> temp_key_pair in Save_File_Content)
-            {
-                if ((!temp_key_pair.Key.Contains("_SETTING_")) && (!temp_key_pair.Key.Contains("_SAVE_")) && (temp_key_pair.Key.Contains(vessel_guid.ToString())))
-                {
-                    temp_list.Add(temp_key_pair.Key);
-                    values_removed++;
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: " + temp_key_pair.Key.ToString() + " deleted");
-                }
-            }
-            temp_list.ForEach(delegate(string temp_string) { Save_File_Content.Remove(temp_string); });
-            write_save_values_to_file(values_removed);
-
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: leaving delete_dropped_vessel(Guid vessel_guid)");
-        }
-
-
-/*************************************************************************************************************************/
         public void disable_FMRS()
         {
             if (Debug_Level_1_Active)
@@ -829,6 +799,7 @@ namespace FMRS
                 _SAVE_Has_Launched = false;
 
             write_save_values_to_file();
+            write_recover_file();
 
             if (main_ui_active)
             {
@@ -854,6 +825,12 @@ namespace FMRS
             GameEvents.OnVesselRecoveryRequested.Remove(recovery_requested_handler);
             GameEvents.onGameSceneLoadRequested.Remove(scene_change_handler);
             GameEvents.onVesselCreate.Remove(vessel_create_routine);
+            GameEvents.Contract.onCompleted.Remove(contract_routine);
+            GameEvents.Contract.onFinished.Remove(contract_routine);
+            GameEvents.OnScienceRecieved.Remove(science_sent_routine);
+            GameEvents.onCrewKilled.Remove(crew_killed_handler);
+            GameEvents.OnReputationChanged.Remove(rep_changed);
+            GameEvents.onVesselGoOnRails.Remove(vessel_on_rails);
             
             reset_n_launchpad = false;
             n_launchpad_preflight = false;
@@ -864,21 +841,41 @@ namespace FMRS
 
 
 /*************************************************************************************************************************/
-        public void recovery_requested_handler(Vessel input)
+        public void recovery_requested_handler(Vessel vessel_recovered)
         {
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: enter recovery_requested_handler(Vessel input)");
             if (Debug_Active)
                 Debug.Log("#### FMRS: Vessel recovery_requested_handler");
 
-            save_landed_vessel();
+            if (vessel_recovered.id.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"))
+            {
+                _SAVE_Has_Closed = true;
+                return;
+            }
 
-            _SAVE_Has_Recovered = true;
-            set_save_value("_SAVE_Recovered_Vessel", input.id.ToString());
+            save_landed_vessel(false);
 
-            delete_dropped_vessel(input.id);
-            set_save_value("_RECOVERED_" + input.id.ToString(), true.ToString());
+            if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER || HighLogic.CurrentGame.Mode == Game.Modes.SCIENCE_SANDBOX)
+            {
+                GamePersistence.SaveGame("recover_save", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
+                Game recover_save = GamePersistence.LoadGame("recover_save", HighLogic.SaveFolder + "/FMRS", false, false);
+                Game savegame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", false, false);
 
+                savegame = recover_vessel(vessel_recovered.id, recover_save, savegame);
+
+                ProtoVessel temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID == vessel_recovered.id);
+                if (temp_proto != null)
+                    savegame.flightState.protoVessels.Remove(temp_proto);
+
+                GamePersistence.SaveGame(savegame, "FMRS_main_save", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
+            }
+            else
+                Vessels_dropped_recovered.Add(vessel_recovered.id, true);
+
+
+            _SAVE_Kick_To_Main = true;                                                               
+            
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leave recovery_requested_handler(Vessel input)");
         }
@@ -898,15 +895,18 @@ namespace FMRS
                 if (Debug_Active)
                     Debug.Log("#### FMRS: switch to not flight scene");
 
-                if (_SAVE_Has_Recovered)
+                if (_SAVE_Kick_To_Main)
                     return;
 
                 if (Debug_Active)
                     Debug.Log("#### FMRS: has not recovered");
 
-                save_landed_vessel();
+                save_landed_vessel(true);
 
-                _SAVE_Has_Closed = true;
+                if (_SAVE_Switched_To_Dropped)
+                    _SAVE_Kick_To_Main = true;
+                else
+                    _SAVE_Has_Closed = true;
             }
 
             if (Debug_Level_1_Active)
@@ -929,19 +929,32 @@ namespace FMRS
 
                 _SAVE_Has_Launched = false;
                 _SAVE_Has_Closed = false;
-                set_save_value("_SAVE_Main_Vessel", FlightGlobals.ActiveVessel.id.ToString());
-                set_save_value("_SAVE_Launched_At", false.ToString());
                 _SAVE_Switched_To_Dropped = false;
+                _SAVE_Kick_To_Main = false;
+                set_save_value(save_cat.SAVE, "Main_Vessel", FlightGlobals.ActiveVessel.id.ToString());
+                set_save_value(save_cat.SAVE, "Launched_At", false.ToString());
+
+                recover_values.Clear();
 
                 GamePersistence.SaveGame("before_launch", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
+                GamePersistence.SaveGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
+                _SETTING_Can_Restart = HighLogic.CurrentGame.Parameters.Flight.CanRestart;
             }
             else
             {
                 get_dropped_vessels();
             }
 
-            if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value("_SAVE_Main_Vessel"))
+            if (FlightGlobals.ActiveVessel.id.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"))
                 _SAVE_Switched_To_Dropped = false;
+            else
+                _SAVE_Switched_To_Dropped = true;
+
+            if (!_SAVE_Switched_To_Dropped)
+            {
+                Timer_Trigger_Start_Delay = Planetarium.GetUniversalTime();
+                timer_delay_active = true;
+            }
 
             if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id))
             {
@@ -976,26 +989,37 @@ namespace FMRS
 
             timer_active = false;
             really_close = false;
-            really_close_old = false;
-            revert_to_launch = false;
-            revert_to_launch_old = false;
+            revert_to_launch = false; 
             undocked_vessel = false;
             staged_vessel = false;
-            GameEvents.onStageSeparation.Add(staging_routine);
-            GameEvents.onVesselCreate.Add(vessel_create_routine);
-            GameEvents.onCollision.Add(crash_handler);
-            GameEvents.onCrash.Add(crash_handler);
-            GameEvents.onCrashSplashdown.Add(crash_handler);
-            GameEvents.onVesselChange.Add(vessel_change_handler);
-            GameEvents.OnVesselRecoveryRequested.Add(recovery_requested_handler);
-            GameEvents.onGameSceneLoadRequested.Add(scene_change_handler);
 
+            current_rep = Reputation.CurrentRep;
+            last_rep_change = 0;
+
+            if (_SAVE_Switched_To_Dropped) //sithilfe testing
+            {
+                GameEvents.OnVesselRecoveryRequested.Add(recovery_requested_handler);
+                GameEvents.Contract.onCompleted.Add(contract_routine);
+                GameEvents.Contract.onFinished.Add(contract_routine);
+                GameEvents.OnScienceRecieved.Add(science_sent_routine);
+                GameEvents.onCollision.Add(crash_handler);
+                GameEvents.onCrash.Add(crash_handler);
+                GameEvents.onCrashSplashdown.Add(crash_handler);
+                GameEvents.onCrewKilled.Add(crew_killed_handler);
+                GameEvents.OnReputationChanged.Add(rep_changed);
+            }
+            else
+            {
+                GameEvents.onVesselGoOnRails.Add(vessel_on_rails);
+            }
+            
+            GameEvents.onVesselChange.Add(vessel_change_handler);
+            GameEvents.onGameSceneLoadRequested.Add(scene_change_handler);
+            
             if (!main_ui_active)
             {
-                reset_window_size = true;
                 RenderingManager.AddToPostDrawQueue(3, new Callback(drawMainGUI));
                 main_ui_active = true;
-                reset_window_size = true;
                 if (Debug_Active)
                     Debug.Log("#### FMRS: activate drawMainGUI");
             }
@@ -1018,7 +1042,7 @@ namespace FMRS
 
             if (loadgame != null && loadgame.compatible && loadgame.flightState != null)
             {
-                temp_proto = loadgame.flightState.protoVessels.Find(p => p.vesselID.ToString() == get_save_value("_SAVE_Main_Vessel"));
+                temp_proto = loadgame.flightState.protoVessels.Find(p => p.vesselID.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"));
                 if (temp_proto != null)
                 {
                     if (Vessels_dropped.ContainsKey(temp_proto.vesselID))
@@ -1035,13 +1059,11 @@ namespace FMRS
                 if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id))
                     delete_dropped_vessel(FlightGlobals.ActiveVessel.id);
 
-                set_save_value("_SAVE_Main_Vessel", FlightGlobals.ActiveVessel.id.ToString());
+                set_save_value(save_cat.SAVE, "Main_Vessel", FlightGlobals.ActiveVessel.id.ToString());
             }
             else
                 if (Debug_Active)
                     Debug.Log("#### FMRS: unable to load savefile");
-
-            reset_window_size = true;
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving main_vessel_changed(string save_file)");
@@ -1071,6 +1093,13 @@ namespace FMRS
         {
             if (_SETTING_Enabled)
             {
+                if (timer_delay_active)
+                    if ((Timer_Start_Delay + Timer_Trigger_Start_Delay) <= Planetarium.GetUniversalTime())
+                    {
+                        write_recvoered_values_to_save();
+                        timer_delay_active = false;
+                    }
+        
                 if (timer_active)
                 {
                     if ((Timer_Trigger + Timer_Delay) <= Planetarium.GetUniversalTime())
@@ -1118,10 +1147,10 @@ namespace FMRS
                         {
                             GamePersistence.SaveGame(quicksave_file_name, HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
 
-                            if (get_save_value("_SAVE_Main_Vessel") != FlightGlobals.ActiveVessel.id.ToString() && !_SAVE_Switched_To_Dropped)
+                            if (get_save_value(save_cat.SAVE, "Main_Vessel") != FlightGlobals.ActiveVessel.id.ToString() && !_SAVE_Switched_To_Dropped)
                                 main_vessel_changed(quicksave_file_name);
 
-                            set_save_value(quicksave_file_name, Planetarium.GetUniversalTime().ToString());
+                            set_save_value(save_cat.SAVEFILE, quicksave_file_name, Planetarium.GetUniversalTime().ToString());
                             write_save_values_to_file();
                         }
                     }
@@ -1135,8 +1164,6 @@ namespace FMRS
                         if (Debug_Active)
                             Debug.Log("#### FMRS: activate reset window");
 
-                        reset_window_size = true;
-
                         if (!reset_ui_active)
                         {
                             windowPos.height = 0;
@@ -1147,7 +1174,6 @@ namespace FMRS
                                 Debug.Log("#### FMRS: activate drawResetGUI");
                         }
                         reset_n_launchpad = true;
-                        n_launchpad_preflight = false;
                     }
                 }
                 else
@@ -1185,24 +1211,21 @@ namespace FMRS
 /*************************************************************************************************************************/
         public void drawResetGUI()
         {
-            GUI.skin = HighLogic.Skin;
-            windowPos = GUILayout.Window(1, windowPos, ResetGUI, "FMRS " + mod_version, GUILayout.MinWidth(100));
+            if (!skin_init)
+                init_skin();
+            GUI.skin = mySkin;
+            windowPos = GUILayout.Window(1, windowPos, ResetGUI, "FMRS");
+            windowPos.x = Mathf.Clamp(windowPos.x, 0, Screen.width - windowPos.width);
+            windowPos.y = Mathf.Clamp(windowPos.y, 0, Screen.height - windowPos.height);
         }
 
 
 /*************************************************************************************************************************/
         public void ResetGUI(int windowID)
         {
-            GUIStyle Button_Style = new GUIStyle(GUI.skin.button);
-            Button_Style.normal.textColor = Button_Style.focused.textColor = Color.white;
-            Button_Style.hover.textColor = Button_Style.active.textColor = Color.yellow;
-            Button_Style.onNormal.textColor = Button_Style.onFocused.textColor = Button_Style.onHover.textColor = Button_Style.onActive.textColor = Color.green;
-            Button_Style.padding = new RectOffset(3, 4, 4, 4);
-            Button_Style.alignment = TextAnchor.MiddleCenter;
-
             GUILayout.BeginVertical();
 
-            if (GUILayout.Button("Reset", Button_Style, GUILayout.Width(100)))
+            if (GUILayout.Button("Reset", button_small, GUILayout.Width(50)))
             {
                 if (Debug_Active)
                     Debug.Log("#### FMRS: ActiveVessel is prelaunch, not on Launchpad");
@@ -1220,12 +1243,468 @@ namespace FMRS
                 }
 
                 flight_scene_start_routine();
-                
+
             }
 
             GUILayout.EndVertical();
 
             GUI.DragWindow(new Rect(0, 0, 10000, 20));
+        }
+
+
+/*************************************************************************************************************************/
+        public void contract_routine(Contracts.Contract input_contract)
+        {
+             if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter vcontract_routine(Contracts.Contract input_contract)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: Contract " + input_contract.Title + " : " + input_contract.ContractState.ToString());
+
+            if (HighLogic.CurrentGame.Mode != Game.Modes.CAREER)
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: not in carreer mode, leave contract_routine(Contracts.Contract input_contract)");
+                return;
+            }
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave vcontract_routine(Contracts.Contract input_contract)");
+        }
+
+
+/*************************************************************************************************************************/
+        public void science_sent_routine(float science, ScienceSubject input_science_sub)
+        {
+            science_data_sent data;
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter science_routine(float amount, ScienceSubject input_science_sub)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: Science received");
+
+            if (HighLogic.CurrentGame.Mode != Game.Modes.CAREER && HighLogic.CurrentGame.Mode != Game.Modes.SCIENCE_SANDBOX)
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: not in sience carreer mode, leave science_routine(float amount, ScienceSubject input_science_sub)");
+                return;
+            }
+
+            if (Debug_Active)
+                Debug.Log("#### FMRS: science sent: " + input_science_sub.id + " + " + science.ToString());
+
+            data.id = input_science_sub.id;
+            data.amount = science;
+            science_sent.Add(data);
+        
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave science_routine(float amount, ScienceSubject input_science_sub)");
+        }
+
+
+/*************************************************************************************************************************/
+        public void FMRS_core_awake()
+        {
+            mod_vers = version_number;
+            init_Save_File_Content();
+            load_save_file();
+        }
+
+
+/*************************************************************************************************************************/
+        private void init_skin()
+        {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter sinit_skin()");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: init_skin");
+
+            mySkin = HighLogic.Skin;
+            mySkin.button.normal.textColor = Color.white;
+            mySkin.button.hover.textColor = Color.yellow;
+            mySkin.button.onNormal.textColor = Color.green;
+            mySkin.button.padding = new RectOffset(5, 3, 3, 3);
+            mySkin.button.border = new RectOffset(3, 3, 3, 3);
+            mySkin.button.margin = new RectOffset(1, 1, 1, 1);
+            mySkin.button.overflow = new RectOffset(1, 1, 1, 1);
+            mySkin.button.alignment = TextAnchor.MiddleLeft;
+            mySkin.button.wordWrap = false;
+            mySkin.button.clipping = TextClipping.Clip;
+
+            mySkin.textArea.padding = new RectOffset(3, 3, 4, 2);
+            mySkin.textArea.border = new RectOffset(3, 3, 3, 3);
+            mySkin.textArea.margin = new RectOffset(1, 1, 1, 1);
+            mySkin.textArea.overflow = new RectOffset(1, 1, 1, 1);
+            mySkin.textArea.alignment = TextAnchor.MiddleLeft;
+            mySkin.textArea.wordWrap = false;
+            mySkin.textArea.clipping = TextClipping.Clip;
+
+            button_main = new GUIStyle(mySkin.button);
+            button_green = new GUIStyle(mySkin.button);
+            button_green.normal.textColor = button_green.focused.textColor = Color.green;
+            button_red = new GUIStyle(mySkin.button);
+            button_red.normal.textColor = button_red.focused.textColor = Color.red;
+            button_yellow = new GUIStyle(mySkin.button);
+            button_yellow.normal.textColor = button_yellow.focused.textColor = Color.yellow;
+            button_small = new GUIStyle(mySkin.button);
+            button_small.padding = new RectOffset(2, 3, 3, 3);
+            button_small.alignment = TextAnchor.MiddleCenter;
+            button_small_red = new GUIStyle(button_small);
+            button_small_red.normal.textColor = button_small_red.focused.textColor = Color.red;
+
+            button_big = new GUIStyle(mySkin.button);
+            button_big.padding = new RectOffset(6, 6, 6, 6);
+            button_big.alignment = TextAnchor.MiddleCenter;
+
+            text_main = new GUIStyle(mySkin.textArea);
+            text_green = new GUIStyle(mySkin.textArea);
+            text_green.normal.textColor = Color.green;
+            text_cyan = new GUIStyle(mySkin.textArea);
+            text_cyan.normal.textColor = Color.cyan;
+            text_red = new GUIStyle(mySkin.textArea);
+            text_red.normal.textColor = Color.red;
+            text_yellow = new GUIStyle(mySkin.textArea);
+            text_yellow.normal.textColor = Color.yellow;
+            text_heading = new GUIStyle(mySkin.textArea);
+            text_heading.fontSize = 16;
+            text_heading.fontStyle = FontStyle.Bold;
+            text_heading.alignment = TextAnchor.MiddleCenter;
+
+            area_style = new GUIStyle(mySkin.textArea);
+            area_style.active = area_style.hover = area_style.normal;
+
+            scrollbar_stlye = new GUIStyle(mySkin.scrollView);
+            scrollbar_stlye.padding = new RectOffset(3, 3, 3, 3);
+            scrollbar_stlye.border = new RectOffset(3, 3, 3, 3);
+            scrollbar_stlye.margin = new RectOffset(1, 1, 1, 1);
+            scrollbar_stlye.overflow = new RectOffset(1, 1, 1, 1);
+
+            skin_init = true;
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave init_skin()");
+        }
+
+
+/*************************************************************************************************************************/
+        private float vessels_cost(ProtoVessel temp_vessel)
+        {
+            float partcost, float_dummy, vesselcost = 0;
+            PartResourceDefinition resc_def;
+            
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter float vessels_cost(ProtoVessel temp_vessel)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: Calculate cost from: " + temp_vessel.vesselName);
+
+            foreach (ProtoPartSnapshot part in temp_vessel.protoPartSnapshots)
+            {
+                ShipConstruction.GetPartCosts(part, part.partInfo, out partcost, out float_dummy);
+                foreach (ProtoPartResourceSnapshot resc in part.resources)
+                {
+                    resc_def = PartResourceLibrary.Instance.resourceDefinitions[resc.resourceName];
+                    partcost += float.Parse(resc.resourceValues.GetValue("amount")) * resc_def.unitCost;
+                }
+                vesselcost += partcost;
+            }
+
+            if (Debug_Active)
+                Debug.Log("#### FMRS cost: " + vesselcost.ToString());
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave float vessels_cost(ProtoVessel temp_vessel)");
+
+            return(vesselcost);
+        }
+
+
+/*************************************************************************************************************************/
+        private List<ScienceData> recover_science(ProtoVessel proto_vessel)
+        {
+            List<ScienceData> science_data = new List<ScienceData>();
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter recover_science(GUI Vessel_id, Game save)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: Try recover science from: " + proto_vessel.vesselName);
+
+            foreach (ProtoPartSnapshot part in proto_vessel.protoPartSnapshots)
+            {
+                foreach (ProtoPartModuleSnapshot module in part.modules)
+                {
+                    foreach (ConfigNode science_node in module.moduleValues.GetNodes("ScienceData"))
+                    {
+                        science_data.Add(new ScienceData(science_node));
+                        if (Debug_Active)
+                            Debug.Log("#### FMRS: ScienceData: " + science_node.GetValue("subjectID") + " found");
+                    }
+                }
+            }
+            
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave recover_science(GUI Vessel_id, Game save)");
+
+            return science_data;
+        }
+
+
+/*************************************************************************************************************************/
+        private Game recover_vessel(Guid vessel_id, Game recover_save, Game savegame)
+        {
+            ProtoVessel proto_vessel;
+            float cost, rec_fact, science=0;
+            string message = "";
+
+            if (Debug_Active)
+                Debug.Log("#### FMRS: enter recover_vessel(Guid Vessel_id, Game save): " + vessel_id.ToString());
+
+            proto_vessel = recover_save.flightState.protoVessels.Find(v => v.vesselID == vessel_id);
+
+            if (proto_vessel != null)
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: Recover Vessel: " + proto_vessel.vesselName);
+
+                if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER)
+                {
+                    cost = vessels_cost(proto_vessel);
+                    rec_fact = calc_recovery_factor(proto_vessel);
+                    cost *= rec_fact;
+                    set_recoverd_value("fund", "add", cost.ToString());
+
+                    message = "Recovery Factor: " + rec_fact.ToString() + "@";
+                    message += "Funds: +" + cost.ToString() + "@";
+                }
+
+                if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER || HighLogic.CurrentGame.Mode == Game.Modes.SCIENCE_SANDBOX)
+                {
+                    foreach (ScienceData recovered_data in recover_science(proto_vessel))
+                    {
+                        ScienceSubject temp_sub = ResearchAndDevelopment.GetSubjectByID(recovered_data.subjectID);
+                        string temp_string = temp_sub.id + "@" + temp_sub.dataScale.ToString() + "@" + temp_sub.subjectValue.ToString() + "@" + temp_sub.scienceCap.ToString();
+                        set_recoverd_value("science", temp_string, recovered_data.dataAmount.ToString());
+                        science += recovered_data.dataAmount;
+                    }
+                    foreach (science_data_sent science_sub in science_sent)
+                    {
+                        ScienceSubject temp_sub = ResearchAndDevelopment.GetSubjectByID(science_sub.id);
+                        string temp_string = temp_sub.id + "@" + temp_sub.dataScale.ToString() + "@" + temp_sub.subjectValue.ToString() + "@" + temp_sub.scienceCap.ToString();
+                        set_recoverd_value("science_sent", temp_string, science_sub.amount.ToString());
+                        science += science_sub.amount;
+                    }
+
+                    if (science > 0)
+                        message += "Scienec Data: +" + science.ToString() + " Mbit@";
+                }
+
+                foreach (ProtoCrewMember crew_member in proto_vessel.GetVesselCrew())
+                {
+                    foreach (ProtoCrewMember member in savegame.CrewRoster.Crew)
+                    {
+                        if (member.name == crew_member.name)
+                        {
+                            member.rosterStatus = ProtoCrewMember.RosterStatus.Available;
+                            message += member.name + "@";
+
+                            if (Debug_Active)
+                                Debug.Log("#### FMRS: " + crew_member.name + " set Available");
+                        }
+                    }
+                }
+
+                if (message != "")
+                    set_recoverd_value("message", "FMRS Recovery Info: " + proto_vessel.vesselName, message);
+
+                Vessels_dropped_recovered.Add(proto_vessel.vesselID, true);
+            }
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave recover_vessel(Guid Vessel_id, Game save)");
+
+            return savegame;
+        }
+
+        
+/*************************************************************************************************************************/
+        private float calc_recovery_factor(ProtoVessel proto_Vessel)
+        {
+            float factor, landing_distance;
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter calc_recovery_factor(ProtoVessel proto_Vessel)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: calculate recovery factor for " + proto_Vessel.vesselName);
+
+            if (proto_Vessel.landedAt == "LaunchPad" || proto_Vessel.landedAt == "Runway")
+            {
+                factor = 1;
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: landed at launchpad or runway");
+            }
+            else
+            {
+                landing_distance = (float)SpaceCenter.Instance.GreatCircleDistance(SpaceCenter.Instance.cb.GetRelSurfaceNVector(proto_Vessel.latitude, proto_Vessel.longitude));
+                factor = Mathf.Lerp(0.98f, 0.1f, (float)(landing_distance / (SpaceCenter.Instance.cb.Radius * Math.PI)));
+
+            }
+
+            if (Debug_Active)
+                Debug.Log("#### FMRS: recovery factor " + factor.ToString() );
+            return factor;
+        }
+
+
+/*************************************************************************************************************************/
+        private void write_recvoered_values_to_save()
+        {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter add_recvoered_values_to_save()");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: add recovered values to game save");
+
+            foreach (recover_value recover_data in recover_values)
+            {
+
+                if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER)
+                    if (recover_data.cat == "fund")
+                    {
+                        if (recover_data.key == "add")
+                        {
+                            if (Debug_Active)
+                                Debug.Log("#### FMRS: adding " + recover_data.value + " funds");
+                            Funding.Instance.Funds += float.Parse(recover_data.value);
+                        }
+                    }
+                if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER || HighLogic.CurrentGame.Mode == Game.Modes.SCIENCE_SANDBOX)
+                {
+                    if (recover_data.cat == "science")
+                    {
+                        if (Debug_Active)
+                            Debug.Log("#### FMRS: adding " + recover_data.key + " " + recover_data.value + " science");
+
+                        string[] line = recover_data.key.Split('@');
+                        ScienceSubject subject;
+                        subject = ResearchAndDevelopment.GetSubjectByID(line[0].Trim());
+                        if (subject == null)
+                        {
+                            if (Debug_Active)
+                                Debug.Log("#### FMRS: subject not found");
+
+                            subject = new ScienceSubject(line[0].Trim(), line[1].Trim(), float.Parse(line[2].Trim()), float.Parse(line[3].Trim()), float.Parse(line[4].Trim()));
+                        }
+
+
+                        ResearchAndDevelopment.Instance.SubmitScienceData(float.Parse(recover_data.value), subject, 1f);
+                    }
+                    if (recover_data.cat == "science_sent")
+                    {
+                        if (Debug_Active)
+                            Debug.Log("#### FMRS: adding " + recover_data.key + " " + recover_data.value + " science sent");
+
+                        string[] line = recover_data.key.Split('@');
+                        ScienceSubject subject;
+                        subject = ResearchAndDevelopment.GetSubjectByID(line[0].Trim());
+                        if (subject == null)
+                        {
+                            if (Debug_Active)
+                                Debug.Log("#### FMRS: subject not found");
+
+                            subject = new ScienceSubject(line[0].Trim(), line[1].Trim(), float.Parse(line[2].Trim()), float.Parse(line[3].Trim()), float.Parse(line[4].Trim()));
+                        }
+
+                        ResearchAndDevelopment.Instance.SubmitScienceData(float.Parse(recover_data.value), subject, 1f);
+                    }
+                }
+                if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER)
+                    if (recover_data.cat == "kerbal")
+                    {
+                        if (recover_data.key == "kill")
+                        {
+                            Reputation.Instance.AddReputation(float.Parse(recover_data.value));
+                        }
+                    }
+                if (recover_data.cat == "message")
+                {
+                    if (Debug_Active)
+                        Debug.Log("#### FMRS: printing message");
+                    MessageSystem.Instance.AddMessage(new MessageSystem.Message(recover_data.key, recover_data.value.Replace("@", System.Environment.NewLine), MessageSystemButton.MessageButtonColor.GREEN, MessageSystemButton.ButtonIcons.MESSAGE));
+                }
+            }
+
+            recover_values.Clear();
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave add_recvoered_values_to_save()");
+        }
+
+                
+/*************************************************************************************************************************/
+        void crew_killed_handler(EventReport report)
+        {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter crew_killed_handler(EventReport report)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: crew member killed: " + report.sender + " rep los: " + last_rep_change.ToString());
+
+            if (HighLogic.CurrentGame.Mode != Game.Modes.CAREER)
+                return;
+
+            killed_kerbals.Add(report.sender, last_rep_change);
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave crew_killed_handler(EventReport report)");
+        }
+
+
+/*************************************************************************************************************************/
+        void rep_changed(float rep)
+        {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter rep_changed(float rep)");
+
+            if (HighLogic.CurrentGame.Mode != Game.Modes.CAREER)
+                return;
+
+            last_rep_change = rep - current_rep;
+
+            if (Debug_Active)
+                Debug.Log("#### FMRS: rep changed: " + rep.ToString() + " " + last_rep_change.ToString());
+
+            current_rep = rep;
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave rep_changed(float rep)");
+        }
+
+
+/*************************************************************************************************************************/
+        void vessel_on_rails(Vessel vessel)
+        {
+            List<ProtoCrewMember> member_list = new List<ProtoCrewMember>();
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: enter vessel_on_rails(Vessel vessel)");
+            if (Debug_Active)
+                Debug.Log("#### FMRS: Vessel will be on rails: " + vessel.vesselName);
+
+            if (Vessels_dropped.ContainsKey(vessel.id))
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: this vessel is listed");
+
+                foreach (ProtoPartSnapshot part_snapshot in vessel.protoVessel.protoPartSnapshots)
+                {
+                    foreach (ProtoCrewMember member in part_snapshot.protoModuleCrew)
+                        member_list.Add(member);
+                    foreach(ProtoCrewMember member in member_list)
+                    {
+                        if (Debug_Active)
+                            Debug.Log("#### FMRS: remove crew member " + member.name);
+                        part_snapshot.RemoveCrew(member);
+                    }
+                    member_list.Clear();
+                }
+            }
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leave vessel_on_rails(Vessel vessel)");
         }
     }
 }

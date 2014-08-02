@@ -50,9 +50,9 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Awake()
         {
-            Debug.Log("#### FMRS Version: " + mod_version);
+            FMRS_core_awake();
 
-            load_save_file();
+            Debug.Log("#### FMRS Version: ");
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS On Awake");
@@ -98,7 +98,7 @@ namespace FMRS
             if (_SETTING_Enabled && !_SAVE_Has_Closed)
             {
                 if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && _SAVE_Has_Launched)
-                    if (get_save_value("_SAVE_Main_Vessel") == FlightGlobals.ActiveVessel.id.ToString())
+                    if (get_save_value(save_cat.SAVE, "Main_Vessel") == FlightGlobals.ActiveVessel.id.ToString())
                         GamePersistence.SaveGame("persistent", HighLogic.SaveFolder, SaveMode.OVERWRITE);
 
                 flight_scene_start_routine();
@@ -138,6 +138,7 @@ namespace FMRS
                 Debug.Log("#### FMRS: leave OnDestroy()");
         }
 
+
 /*************************************************************************************************************************/
         public void toolbar_button_clicked()
         {
@@ -157,7 +158,7 @@ namespace FMRS
                 delete_dropped_vessels();
                 disable_FMRS();
 
-                if (FlightGlobals.ActiveVessel.id.ToString() != get_save_value("_SAVE_Main_Vessel") && _SAVE_Has_Launched)
+                if (FlightGlobals.ActiveVessel.id.ToString() != get_save_value(save_cat.SAVE, "Main_Vessel") && _SAVE_Has_Launched)
                     jump_to_vessel("Main");
             }
             else
@@ -205,6 +206,8 @@ namespace FMRS
     [KSPAddon(KSPAddon.Startup.SpaceCentre, false)]
     public class FMRS_Space_Center : FMRS_Core
     {
+        float delay = 35;
+
 
 /*************************************************************************************************************************/
         public void FMRS()
@@ -216,9 +219,9 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Awake()
         {
-            Debug.Log("#### FMRS Version: " + mod_version);
+            FMRS_core_awake();
 
-            load_save_file();
+            Debug.Log("#### FMRS Version: " + mod_vers);
 
             if (_SETTING_Enabled)
                 get_dropped_vessels();
@@ -231,36 +234,8 @@ namespace FMRS
 /*************************************************************************************************************************/
         void Start()
         {
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS_Space_Center: entering Start()");
-
-            Game savegame;
-            ProtoVessel temp_proto;
-            int load_vessel;
-
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS_Space_Center On Start");
-
-            if (_SAVE_Has_Recovered)
-            {
-                _SAVE_Has_Recovered = false;
-
-                write_save_values_to_file();
-
-                savegame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", false, false);
-
-                temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID.ToString() == get_save_value("_SAVE_Recovered_Vessel"));
-                if (temp_proto != null)
-                    savegame.flightState.protoVessels.Remove(temp_proto);
-
-                for (load_vessel = 0; load_vessel < savegame.flightState.protoVessels.Count && savegame.flightState.protoVessels[load_vessel].vesselID.ToString() != get_save_value("_SAVE_Main_Vessel"); load_vessel++) ;
-
-                if (load_vessel < savegame.flightState.protoVessels.Count)
-                    FlightDriver.StartAndFocusVessel(savegame, load_vessel);
-            }
-
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS_Space_Center: entering Start()");
         }
 
 
@@ -274,12 +249,38 @@ namespace FMRS
 /*************************************************************************************************************************/
         void FixedUpdate()
         {
+            Game savegame;
+            ProtoVessel temp_proto;
+            int load_vessel;
+
+            if (delay > 0 && _SAVE_Kick_To_Main)
+                delay--;
+            else
+                if (_SAVE_Kick_To_Main)
+                {
+                    _SAVE_Kick_To_Main = false;
+
+                    write_save_values_to_file();
+
+                    savegame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", false, false);
+
+                    temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"));
+
+                    if (temp_proto != null)
+                    {
+                        for (load_vessel = 0; load_vessel < savegame.flightState.protoVessels.Count && savegame.flightState.protoVessels[load_vessel].vesselID.ToString() != temp_proto.vesselID.ToString(); load_vessel++) ;
+
+                        if (load_vessel < savegame.flightState.protoVessels.Count)
+                            FlightDriver.StartAndFocusVessel(savegame, load_vessel);
+                    }
+                }
         }
 
 
 /*************************************************************************************************************************/
         void OnDestroy()
         {
+            disable_FMRS();
         }
     }
 }
