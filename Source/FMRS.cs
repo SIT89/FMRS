@@ -27,9 +27,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
+using System.Reflection;
 using UnityEngine;
 using KSP.IO;
-
 
 
 namespace FMRS
@@ -37,8 +38,7 @@ namespace FMRS
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class FMRS : FMRS_Core
     {
-        private IButton Toolbar_Button;
-
+        public ApplicationLauncherButton Stock_Toolbar_Button;      
 
 /*************************************************************************************************************************/
         public FMRS()
@@ -52,10 +52,14 @@ namespace FMRS
         {
             FMRS_core_awake();
 
-            Debug.Log("#### FMRS Version: ");
+            Debug.Log("#### FMRS Version: " + mod_vers);
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: FMRS On Awake");
+
+            stb_texture = new Texture2D(36, 36, TextureFormat.RGBA32, false);
+            stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "StockToolbar.png")));
+            GameEvents.onGUIApplicationLauncherReady.Add(add_toolbar_button);
         }
 
 
@@ -66,6 +70,8 @@ namespace FMRS
             {
                 Toolbar_Button = ToolbarManager.Instance.add("FMRS", "FMRSbutton");
 
+                blz_toolbar_available = true;
+
                 if (_SETTING_Enabled)
                     Toolbar_Button.TexturePath = "FMRS/icon_enabled";
                 else
@@ -75,11 +81,7 @@ namespace FMRS
                 Toolbar_Button.Visibility = new GameScenesVisibility(GameScenes.FLIGHT);
                 Toolbar_Button.OnClick += (e) => toolbar_button_clicked();
             }
-            else
-            {
-                _SETTING_Enabled = true;
-            }
-            
+
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: entering Start()");
 
@@ -98,7 +100,7 @@ namespace FMRS
             if (_SETTING_Enabled && !_SAVE_Has_Closed)
             {
                 if (FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH && _SAVE_Has_Launched)
-                    if (get_save_value(save_cat.SAVE, "Main_Vessel") == FlightGlobals.ActiveVessel.id.ToString())
+                    if (_SAVE_Main_Vessel == FlightGlobals.ActiveVessel.id)
                         GamePersistence.SaveGame("persistent", HighLogic.SaveFolder, SaveMode.OVERWRITE);
 
                 flight_scene_start_routine();
@@ -113,13 +115,17 @@ namespace FMRS
         void Update()
         {
             flight_scene_update_routine();
+
+            /*if (ThrottleLogger != null)
+                ThrottleLogger.Update(Debug_Active, Debug_Level_1_Active);*/
         }
 
 
 /*************************************************************************************************************************/
         void FixedUpdate()
         {
-            //nothing
+            /*if (ThrottleLogger != null)
+                ThrottleLogger.FixedUpdate();*/
         }
 
 
@@ -132,6 +138,9 @@ namespace FMRS
             if (ToolbarManager.ToolbarAvailable)
                 Toolbar_Button.Destroy();
 
+            GameEvents.onGUIApplicationLauncherReady.Remove(add_toolbar_button);
+            ApplicationLauncher.Instance.RemoveModApplication(Stock_Toolbar_Button);
+
             disable_FMRS();
 
             if (Debug_Level_1_Active)
@@ -140,57 +149,14 @@ namespace FMRS
 
 
 /*************************************************************************************************************************/
-        public void toolbar_button_clicked()
+        public void add_toolbar_button()
         {
-            if (Debug_Active)
-                Debug.Log("#### FMRS: Toolbar Button Clicked");
-
-            if (_SETTING_Enabled)
-            {
-                if (Debug_Active)
-                    Debug.Log("#### FMRS: disable plugin form toolbar");
-
-                _SETTING_Enabled = false;
-                _SAVE_Has_Closed = true;
-
-                Toolbar_Button.TexturePath = "FMRS/icon_disabled";
-
-                delete_dropped_vessels();
-                disable_FMRS();
-
-                if (FlightGlobals.ActiveVessel.id.ToString() != get_save_value(save_cat.SAVE, "Main_Vessel") && _SAVE_Has_Launched)
-                    jump_to_vessel("Main");
-            }
-            else
-            {
-                if (Debug_Active)
-                    Debug.Log("#### FMRS: enable plugin form toolbar");
-
-                Toolbar_Button.TexturePath = "FMRS/icon_enabled";
-                _SETTING_Enabled = true;
-
-                if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
-                {
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: start plugin on launchpad");
-
-                    GameEvents.onLaunch.Add(launch_routine);
-                    flight_scene_start_routine();
-                }
-
-                if (FlightGlobals.ActiveVessel.Landed && FlightGlobals.ActiveVessel.vesselType != VesselType.EVA 
-                    && FlightGlobals.ActiveVessel.vesselType != VesselType.Debris && FlightGlobals.ActiveVessel.vesselType != VesselType.Flag
-                    && FlightGlobals.ActiveVessel.isCommandable)
-                {
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: start plugin not on launchpad");
-
-                    reset_n_launchpad = false;
-                    n_launchpad_preflight = true;
-                    GameEvents.onLaunch.Add(launch_routine);
-                    flight_scene_start_routine();
-                }
-            }
+            Stock_Toolbar_Button = ApplicationLauncher.Instance.AddModApplication(
+                toolbar_button_clicked,
+                toolbar_button_clicked,
+                null, null, null, null,
+                ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW,
+                stb_texture);
         }
     }
 
@@ -253,18 +219,17 @@ namespace FMRS
             ProtoVessel temp_proto;
             int load_vessel;
 
-            if (delay > 0 && _SAVE_Kick_To_Main)
-                delay--;
-            else
-                if (_SAVE_Kick_To_Main)
+            if (_SAVE_Kick_To_Main)
+            {
+                if (delay > 0)
+                    delay--;
+                else
                 {
                     _SAVE_Kick_To_Main = false;
-
                     write_save_values_to_file();
 
                     savegame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", false, false);
-
-                    temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID.ToString() == get_save_value(save_cat.SAVE, "Main_Vessel"));
+                    temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID == _SAVE_Main_Vessel);
 
                     if (temp_proto != null)
                     {
@@ -274,6 +239,7 @@ namespace FMRS
                             FlightDriver.StartAndFocusVessel(savegame, load_vessel);
                     }
                 }
+            }
         }
 
 

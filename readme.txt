@@ -1,4 +1,4 @@
-[0.24.2] Flight Manager for Reusable Stages [FMRS] v0.2.00
+[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.01
 ==========================================================
 
 
@@ -19,6 +19,8 @@ Description
 	http://forum.kerbalspaceprogram.com/threads/80292-0-23-5-Flight-Manager-for-Reusable-Stages-%28FMRS%29
 	Source
 	https://github.com/SIT89/FMRS
+	Kerbal Stuff
+	https://kerbalstuff.com/mod/172/Flight%20Manager%20for%20Reusable%20Stages%20%5BFMRS%5D
 	Curse
 	http://kerbal.curseforge.com/plugins/220566-fmrs-v0-1-00
 
@@ -57,14 +59,12 @@ Features
 		If you kill a Kerbal during flying a dropped craft, you will lose reputation in your main save.
 
 	Toolbar support.
-		FMRS supports Blizzy78's Toolbar Plugin.
+		FMRS supports the stock toolbar and Blizzy78's Toolbar Plugin.
 		http://forum.kerbalspaceprogram.com/threads/60863-0-23-5-Toolbar-1-7-1-Common-API-for-draggable-resizable-buttons-toolbar
 
 
 Installation
 ============
-
-	!!!!!! BEFORE UPDATING FROM v0.1.xx TO v0.2.00 DELETE THE FOLDER "PluginData" INSIDE "GameData\FMRS" !!!!!!!
 
 	Copy the FMRS Folder into the GameData Folder of you KSP install.
 
@@ -90,6 +90,17 @@ Known issues
 Change log
 ============
 
+	v0.2.01
+		compiled with 0.25 x64
+		stock toolbar support added
+		"Jump back to Separation" button is now dependent to the settings in the debug toolbar (Quicksave & Quickload)
+		all non staged vessels are all listed as separtated (no more undocked listings)
+		recovery message now lists parts and resources
+		after separtion the main vessel can be changed for 10 sec ("Focus Next Vessel", "Focus Prev Vessel")
+		bug fix: kerbal in main vessel killed, while flying separated stage, leads to rep loss in main save
+		bug fix: closing the plugin using the toolbar kicks you not to the main save
+		bug fix: reading empty save file entrys = nullreference exception
+
 	v0.2.00
 		!!!!!! BEFORE UPDATING FROM v0.1.xx TO v0.2.00 DELETE THE FOLDER "PluginData" INSIDE "GameData\FMRS" !!!!!!!
 
@@ -102,7 +113,7 @@ Change log
 		text box for recovered vessels added
 		recognizes stages with RealChute as controllable
 		window is now clamped inside the screen
-		revert to launch button is now dependent to the settings in the debug toolbar
+		"Revert To Launch" button is now dependent to the settings in the debug toolbar
 		save file structure changed
 		bug fix: window disappears after decoupling before launch
 		bug fix: plugin doesn´t resets after revert to launch (to a not on launch pad launch)
