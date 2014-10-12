@@ -1,4 +1,4 @@
-[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.01
+[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.02
 ==========================================================
 
 
@@ -16,7 +16,7 @@ Description
 	The separated vessels will be added to your main save after landing, or automatically recovered.
 	
 	Forum Thread
-	http://forum.kerbalspaceprogram.com/threads/80292-0-23-5-Flight-Manager-for-Reusable-Stages-%28FMRS%29
+	http://forum.kerbalspaceprogram.com/threads/80292-0-25-0-Flight-Manager-for-Reusable-Stages-%28FMRS-v0-2-01%29
 	Source
 	https://github.com/SIT89/FMRS
 	Kerbal Stuff
@@ -89,6 +89,13 @@ Known issues
 
 Change log
 ============
+
+	v0.2.02
+		bug fix: starting plugin with toolbar could lead into loading an old save file
+		bug fix: switching to tracking station, while flying dropped stage, doesn't kicks you to main vessel
+		bug fix: the disabled texture for the stock toolbar in not loaded
+		recovering vessel in sandbox now prints a recovery message
+		bounce suppression for the reset button gui added
 
 	v0.2.01
 		compiled with 0.25 x64

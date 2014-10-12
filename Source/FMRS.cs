@@ -58,7 +58,12 @@ namespace FMRS
                 Debug.Log("#### FMRS: FMRS On Awake");
 
             stb_texture = new Texture2D(36, 36, TextureFormat.RGBA32, false);
-            stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "StockToolbar.png")));
+
+            if(_SETTING_Enabled)
+                stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "StockToolbar.png")));
+            else
+                stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "StockToolbarR.png")));
+
             GameEvents.onGUIApplicationLauncherReady.Add(add_toolbar_button);
         }
 
@@ -169,7 +174,7 @@ namespace FMRS
 /*************************************************************************************************************************/
 /*************************************************************************************************************************/
 /*************************************************************************************************************************/
-    [KSPAddon(KSPAddon.Startup.SpaceCentre, false)]
+    [KSPAddon(KSPAddon.Startup.SpaceCentre|KSPAddon.Startup.TrackingStation, false)]
     public class FMRS_Space_Center : FMRS_Core
     {
         float delay = 35;

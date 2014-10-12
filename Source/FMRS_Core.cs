@@ -55,7 +55,7 @@ namespace FMRS
             public Guid vessel_id;
         }
         
-        private string version_number = "v0.2.01";
+        private string version_number = "0.2.02";
         public double Timer_Trigger, Timer_Trigger_Start_Delay;
         public bool timer_active = false, timer_delay_active = false;
         public double Timer_Delay = 0.2, Timer_Start_Delay = 2;
@@ -65,6 +65,7 @@ namespace FMRS
         private bool lost_root_part = false;
         public bool separated_vessel, staged_vessel;
         public bool reset_n_launchpad = false, n_launchpad_preflight = false;
+        public double reset_ui_timer;
         public bool main_ui_active = false, reset_ui_active = false;
         public bool revert_to_launch = false;
         public bool really_close = false;
@@ -204,14 +205,14 @@ namespace FMRS
                 GUILayout.Space(5);
                 window_height += 5;
                 GUILayout.BeginVertical(area_style, GUILayout.Width(266));
-                GUILayout.Space((2 * 30) + 35);
-                _SETTING_Auto_Cut_Off = GUI.Toggle(new Rect(5, 65, 25, 25), _SETTING_Auto_Cut_Off, "Auto Cut Off Engines");
-                window_height += 30; 
-                _SETTING_Auto_Recover = GUI.Toggle(new Rect(5, 95, 25, 25), _SETTING_Auto_Recover, "Auto Recover Landed Crafts");
+                GUILayout.Space((3 * 30) + 5);
+                _SETTING_Auto_Cut_Off = GUI.Toggle(new Rect(5, 35 + (30 *1), 25, 25), _SETTING_Auto_Cut_Off, "Auto Cut Off Engines");
+                window_height += 30;
+                _SETTING_Auto_Recover = GUI.Toggle(new Rect(5, 35 + (30 * 2), 25, 25), _SETTING_Auto_Recover, "Auto Recover Landed Crafts");
                 window_height += 30;
                 /*_SETTING_Throttle_Log = GUI.Toggle(new Rect(5, 125, 25, 25), _SETTING_Throttle_Log, "Throttle Logger WIP");
                 window_height += 30;*/
-                Debug_Active = GUI.Toggle(new Rect(5, 125, 25, 25), Debug_Active, "write debug messages to log file"); //sithilfe Debug_Active = GUI.Toggle(new Rect(5, 155, 25, 25), Debug_Active, "write debug messages to log file");
+                Debug_Active = GUI.Toggle(new Rect(5, 35 + (30 * 3), 25, 25), Debug_Active, "write debug messages to log file"); //sithilfe Debug_Active = GUI.Toggle(new Rect(5, 155, 25, 25), Debug_Active, "write debug messages to log file");
                 GUILayout.EndVertical();
                 window_height += 42;                
             }
@@ -416,6 +417,12 @@ namespace FMRS
                         window_height += 31;
                     }
                 }
+#if DEBUG
+                window_height += 35;
+                GUILayout.Space(10);
+                if (GUILayout.Button("print savefile", button_small, GUILayout.Width(133)))
+                    write_save_values_to_file();
+#endif
             }
             GUILayout.EndVertical();
 
@@ -1060,6 +1067,7 @@ namespace FMRS
 
                 if (_SAVE_Switched_To_Dropped)
                 {
+                    set_recoverd_value("message", "FMRS Info:", "You have switched scenes, while flying a dropped vessel.@Next time, please use the 'Jump back to Main Mission' button.");
                     _SAVE_Kick_To_Main = true;
                     _SAVE_Switched_To_Dropped = false;
                 }
@@ -1334,10 +1342,14 @@ namespace FMRS
                     }
                 }
 
-                if (FlightGlobals.ActiveVessel.Landed && FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH
-                    && _SAVE_Has_Closed && !n_launchpad_preflight)
+                if (FlightGlobals.ActiveVessel.Landed &&
+                    FlightGlobals.ActiveVessel.situation != Vessel.Situations.PRELAUNCH &&
+                    FlightGlobals.ActiveVessel.vesselType != VesselType.EVA &&
+                    FlightGlobals.ActiveVessel.vesselType != VesselType.Flag &&
+                    _SAVE_Has_Closed &&
+                    !n_launchpad_preflight)
                 {
-                    if (!reset_n_launchpad)
+                    if (!reset_n_launchpad && (Planetarium.GetUniversalTime() > reset_ui_timer + 2))
                     {
                         if (Debug_Active)
                             Debug.Log("#### FMRS: activate reset window");
@@ -1356,6 +1368,8 @@ namespace FMRS
                 }
                 else
                 {
+                    reset_ui_timer = Planetarium.GetUniversalTime();
+
                     if (reset_n_launchpad)
                     {
                         if (Debug_Active)
@@ -1489,7 +1503,11 @@ namespace FMRS
 /*************************************************************************************************************************/
         public void FMRS_core_awake()
         {
-            mod_vers = version_number;
+            mod_vers = "v";
+            #if DEBUG
+                mod_vers = "x";
+            #endif
+                mod_vers += version_number;
             init_Save_File_Content();
             load_save_file();
         }
@@ -1677,11 +1695,12 @@ namespace FMRS
                     set_recoverd_value("fund", "add", cost.ToString());
 
                     message += "Funds: +" + Math.Round(cost, 2).ToString() + "@";
-                    message += "Recovery Factor: " + Math.Round(rec_fact,2).ToString() + "@";        
-                    message += "Parts & Resources:@";
-                    message += get_vessel_part_list(proto_vessel);
-                    message += "@";
+                    message += "Recovery Factor: " + Math.Round(rec_fact,2).ToString() + "@";
                 }
+
+                message += "Parts & Resources:@";
+                message += get_vessel_part_list(proto_vessel);
+                message += "@";
 
                 if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER || HighLogic.CurrentGame.Mode == Game.Modes.SCIENCE_SANDBOX)
                 {
@@ -1858,7 +1877,7 @@ namespace FMRS
                     MessageSystem.Instance.AddMessage(new MessageSystem.Message(recover_data.key, recover_data.value.Replace("@", System.Environment.NewLine), MessageSystemButton.MessageButtonColor.GREEN, MessageSystemButton.ButtonIcons.MESSAGE));
                 }
             }
-            
+
             recover_values.Clear();
             write_recover_file();
             if (Debug_Level_1_Active)
@@ -2053,6 +2072,7 @@ namespace FMRS
             {
                 toolbar_open();
             }
+            write_save_values_to_file();
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leave toolbar_button_clicked()");
@@ -2072,6 +2092,7 @@ namespace FMRS
 
             _SETTING_Enabled = false;
             _SAVE_Has_Closed = true;
+            _SAVE_Has_Launched = false;
             delete_dropped_vessels();
             really_close = false;
             tb_close = false;
@@ -2098,9 +2119,9 @@ namespace FMRS
 
             if (blz_toolbar_available)
                 Toolbar_Button.TexturePath = "FMRS/icon_enabled";
+            stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "StockToolbar.png")));
 
             _SETTING_Enabled = true;
-            stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "StockToolbar.png")));
 
             if (FlightGlobals.ActiveVessel.situation == Vessel.Situations.PRELAUNCH)
             {
@@ -2110,8 +2131,7 @@ namespace FMRS
                 GameEvents.onLaunch.Add(launch_routine);
                 flight_scene_start_routine();
             }
-
-            if (FlightGlobals.ActiveVessel.Landed && FlightGlobals.ActiveVessel.vesselType != VesselType.EVA
+            else if (FlightGlobals.ActiveVessel.Landed && FlightGlobals.ActiveVessel.vesselType != VesselType.EVA
                 && FlightGlobals.ActiveVessel.vesselType != VesselType.Debris && FlightGlobals.ActiveVessel.vesselType != VesselType.Flag
                 && FlightGlobals.ActiveVessel.isCommandable)
             {
@@ -2122,6 +2142,11 @@ namespace FMRS
                 n_launchpad_preflight = true;
                 GameEvents.onLaunch.Add(launch_routine);
                 flight_scene_start_routine();
+            }
+            else
+            {
+                _SAVE_Has_Closed = true;
+                _SAVE_Has_Launched = false;
             }
 
             if (Debug_Level_1_Active)
