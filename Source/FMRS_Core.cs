@@ -55,9 +55,10 @@ namespace FMRS
             public Guid vessel_id;
         }
         
-        private string version_number = "0.2.02";
-        public double Timer_Trigger, Timer_Trigger_Start_Delay;
+        private string version_number = "0.2.03";
+        public double Timer_Trigger, Timer_Trigger_Start_Delay, Time_Trigger_Cuto;
         public bool timer_active = false, timer_delay_active = false;
+        public bool timer_cuto_active = false;
         public double Timer_Delay = 0.2, Timer_Start_Delay = 2;
         public double last_staging_event = 0;
         public string quicksave_file_name;
@@ -274,11 +275,11 @@ namespace FMRS
                             if (vessel_in_savefile.Value == save_files.Last())
                             {
                                 GUILayout.BeginHorizontal();
-                                if (Vessels_dropped_recovered.Contains(vessel_in_savefile.Key))
+                                if (get_vessel_state(vessel_in_savefile.Key) == vesselstate.RECOVERED)
                                 {
                                     GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " recovered", text_cyan, GUILayout.Width(205 + scrollbar_offset));
                                 }
-                                else if (Vessels_dropped_landed.Contains(vessel_in_savefile.Key))
+                                else if (get_vessel_state(vessel_in_savefile.Key) == vesselstate.LANDED)
                                 {
                                     GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " landed", text_green, GUILayout.Width(205 + scrollbar_offset));
                                 }
@@ -293,7 +294,7 @@ namespace FMRS
                                         temp_float = 222 + scrollbar_offset;
                                     }
 
-                                    if (Vessels_dropped_destroyed.Contains(vessel_in_savefile.Key))
+                                    if (get_vessel_state(vessel_in_savefile.Key) == vesselstate.DESTROYED)
                                     {
                                         GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " destroyed", text_red, GUILayout.Width(temp_float));
                                     }
@@ -316,7 +317,7 @@ namespace FMRS
                                         GUILayout.BeginHorizontal();
                                     }
                                 }
-                                else if (Vessels_dropped_destroyed.Contains(vessel_in_savefile.Key))
+                                else if (get_vessel_state(vessel_in_savefile.Key) == vesselstate.DESTROYED)
                                 {
                                     GUILayout.Box(Vessels_dropped_names[vessel_in_savefile.Key] + " damaged", text_red, GUILayout.Width(205 + scrollbar_offset));
                                 }
@@ -417,12 +418,18 @@ namespace FMRS
                         window_height += 31;
                     }
                 }
+
 #if DEBUG
                 window_height += 35;
                 GUILayout.Space(10);
-                if (GUILayout.Button("print savefile", button_small, GUILayout.Width(133)))
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("print savefile", button_small, GUILayout.Width(130)))
                     write_save_values_to_file();
+                if (GUILayout.Button("read savefile", button_small, GUILayout.Width(130)))
+                    read_save_file();
+                GUILayout.EndHorizontal();
 #endif
+
             }
             GUILayout.EndVertical();
 
@@ -446,6 +453,8 @@ namespace FMRS
             timer_active = true;
             staged_vessel = true;
             separated_vessel = false;
+            timer_cuto_active = true;
+            Time_Trigger_Cuto = Planetarium.GetUniversalTime();
 
             if (Debug_Active)
                 Debug.Log("#### FMRS: Has Staged");
@@ -483,9 +492,6 @@ namespace FMRS
                 can_q_save_load = true;
             else
                 can_q_save_load = false;
-
-            /*if (_SETTING_Throttle_Log)
-                ThrottleLogger.StartLog();*/
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving launch_routine(EventReport event_imput)");
@@ -558,6 +564,7 @@ namespace FMRS
 
                         Vessels_dropped.Add(temp_vessel.id, save_file_name);
                         Vessels_dropped_names.Add(temp_vessel.id, temp_vessel.vesselName);
+                        Vessel_State.Add(temp_vessel.id, vesselstate.FLY);
                         foreach (ProtoPartSnapshot part_snapshot in temp_vessel.protoVessel.protoPartSnapshots)
                         {
                             foreach (ProtoCrewMember member in part_snapshot.protoModuleCrew)
@@ -568,8 +575,6 @@ namespace FMRS
                             
                         }
                         new_vessel_found = true;
-                        if (_SETTING_Auto_Cut_Off)
-                            temp_vessel.ctrlState.mainThrottle = 0;
                     }
                     Vessels.Add(temp_vessel.id);
                 }
@@ -770,18 +775,17 @@ namespace FMRS
                 loadgame = GamePersistence.LoadGame("FMRS_quicksave", HighLogic.SaveFolder + "/FMRS", false, false);
                 savegame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder + "/FMRS", false, false);
 
-                foreach(Guid temp_guid in loaded_vessels)
+                foreach (Guid temp_guid in loaded_vessels)
                 {
-                    if (!Vessels_dropped_destroyed.Contains(temp_guid))
+                    if (Vessel_State[temp_guid] != vesselstate.DESTROYED)
                     {
                         ProtoVessel temp_proto = loadgame.flightState.protoVessels.Find(v => v.vesselID == temp_guid && (v.landed || v.splashed));
                         if (temp_proto != null)
                         {
                             save_vessel_list.Add(temp_proto);
-                            if (!Vessels_dropped_landed.Contains(temp_proto.vesselID))
-                                Vessels_dropped_landed.Add(temp_proto.vesselID);
+                            Vessel_State[temp_guid] = vesselstate.LANDED;
                         }
-                    }   
+                    }
                 }
 
                 new_vessel = search_for_new_vessels(loadgame,savegame);
@@ -792,11 +796,15 @@ namespace FMRS
                         save_vessel_list.Add(temp_vessel);
                 }
 
-                foreach (Guid id in Vessels_dropped_destroyed)
+                foreach(KeyValuePair<Guid,vesselstate> kvp in Vessel_State)
                 {
-                    ProtoVessel temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID == id);
-                    if (temp_proto != null)
-                        savegame.flightState.protoVessels.Remove(temp_proto);
+                    if(kvp.Value == vesselstate.DESTROYED)
+                    {
+                        ProtoVessel temp_proto = savegame.flightState.protoVessels.Find(p => p.vesselID == kvp.Key);
+                        if (temp_proto != null)
+                            savegame.flightState.protoVessels.Remove(temp_proto);
+                    }
+                    
                 }
 
                 if (save_vessel_list.Count != 0)
@@ -881,10 +889,10 @@ namespace FMRS
 
             if (FlightGlobals.ActiveVessel.state == Vessel.State.DEAD && !lost_root_part)
             {
-                Debug.Log("#### FMRS: lost root part");             
+                Debug.Log("#### FMRS: lost root part");
 
-                if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id) && !Vessels_dropped_destroyed.Contains(FlightGlobals.ActiveVessel.id))
-                    Vessels_dropped_destroyed.Add(FlightGlobals.ActiveVessel.id);
+                if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id) && get_vessel_state(FlightGlobals.ActiveVessel.id) != vesselstate.DESTROYED)
+                    set_vessel_state(FlightGlobals.ActiveVessel.id, vesselstate.DESTROYED);
 
                 lost_root_part = true;
                 destr_vessel_id = FlightGlobals.ActiveVessel.id;
@@ -911,10 +919,15 @@ namespace FMRS
                         {
                             if (Vessels_dropped.ContainsKey(_SAVE_Main_Vessel))
                                 Vessels_dropped.Remove(_SAVE_Main_Vessel);
-                            Vessels_dropped.Add(_SAVE_Main_Vessel, Vessels_dropped[FlightGlobals.ActiveVessel.id]);
-
+                            if (Vessel_State.ContainsKey(_SAVE_Main_Vessel))
+                                Vessel_State.Remove(_SAVE_Main_Vessel);
                             if (Vessels_dropped_names.ContainsKey(_SAVE_Main_Vessel))
                                 Vessels_dropped_names.Remove(_SAVE_Main_Vessel);
+                            if (Vessel_State.ContainsKey(_SAVE_Main_Vessel))
+                                Vessel_State.Remove(_SAVE_Main_Vessel);
+
+                            Vessels_dropped.Add(_SAVE_Main_Vessel, Vessels_dropped[FlightGlobals.ActiveVessel.id]);
+                            Vessel_State.Add(FlightGlobals.ActiveVessel.id, vesselstate.FLY);
                             Vessels_dropped_names.Add(_SAVE_Main_Vessel,temp_vessel.vesselName);
 
                             foreach (ProtoCrewMember crew_member in temp_vessel.protoVessel.GetVesselCrew())
@@ -924,12 +937,9 @@ namespace FMRS
                                 Vessels_dropped.Remove(FlightGlobals.ActiveVessel.id);
                             if (Vessels_dropped_names.ContainsKey(FlightGlobals.ActiveVessel.id))
                                 Vessels_dropped_names.Remove(FlightGlobals.ActiveVessel.id);
-                            if (Vessels_dropped_landed.Contains(FlightGlobals.ActiveVessel.id))
-                                Vessels_dropped_landed.Remove(FlightGlobals.ActiveVessel.id);
-                            if (Vessels_dropped_destroyed.Contains(FlightGlobals.ActiveVessel.id))
-                                Vessels_dropped_destroyed.Remove(FlightGlobals.ActiveVessel.id);
-                            if (Vessels_dropped_recovered.Contains(FlightGlobals.ActiveVessel.id))
-                                Vessels_dropped_recovered.Remove(FlightGlobals.ActiveVessel.id);
+                            if (Vessel_State.ContainsKey(FlightGlobals.ActiveVessel.id))
+                                Vessel_State.Remove(FlightGlobals.ActiveVessel.id);
+                            
                             if(Kerbal_dropped.ContainsValue(FlightGlobals.ActiveVessel.id))
                             {
                                 List<string> kerbals = new List<string>();
@@ -1031,7 +1041,7 @@ namespace FMRS
                 GamePersistence.SaveGame(savegame, "FMRS_main_save", HighLogic.SaveFolder + "/FMRS", SaveMode.OVERWRITE);
             }
             else
-                Vessels_dropped_recovered.Add(vessel_recovered.id);
+                set_vessel_state(vessel_recovered.id, vesselstate.RECOVERED);
 
             save_landed_vessel(false);
 
@@ -1063,16 +1073,19 @@ namespace FMRS
                 if (Debug_Active)
                     Debug.Log("#### FMRS: has not recovered");
 
-                save_landed_vessel(true);
-
                 if (_SAVE_Switched_To_Dropped)
                 {
+                    if (Debug_Active)
+                        Debug.Log("#### FMRS: scene change while flying dropped, kick to main in space center and tracking station");
+
                     set_recoverd_value("message", "FMRS Info:", "You have switched scenes, while flying a dropped vessel.@Next time, please use the 'Jump back to Main Mission' button.");
                     _SAVE_Kick_To_Main = true;
                     _SAVE_Switched_To_Dropped = false;
                 }
                 else
                     _SAVE_Has_Closed = true;
+
+                save_landed_vessel(true);
             }
 
             if (Debug_Level_1_Active)
@@ -1162,19 +1175,7 @@ namespace FMRS
 
             if (Vessels_dropped.ContainsKey(FlightGlobals.ActiveVessel.id))
             {
-                if (Vessels_dropped_destroyed.Contains(FlightGlobals.ActiveVessel.id))
-                {
-                    Vessels_dropped_destroyed.Remove(FlightGlobals.ActiveVessel.id);
-
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: delete " + FlightGlobals.ActiveVessel.id.ToString() + " destroyed message");
-                }
-                if (Vessels_dropped_landed.Contains(FlightGlobals.ActiveVessel.id))
-                {
-                    Vessels_dropped_landed.Remove(FlightGlobals.ActiveVessel.id);
-                    if (Debug_Active)
-                        Debug.Log("#### FMRS: delete " + FlightGlobals.ActiveVessel.id.ToString() + " landed message");
-                }
+                set_vessel_state(FlightGlobals.ActiveVessel.id,vesselstate.FLY);
                 write_save_values_to_file();
             }
 
@@ -1276,11 +1277,15 @@ namespace FMRS
                 Debug.Log("#### FMRS: enter vessel_create_routine(Vessel input) " + input.id.ToString());
             if (Debug_Active)
                 Debug.Log("#### FMRS: Vessel created");
-
-            Timer_Trigger = Planetarium.GetUniversalTime();
-            timer_active = true;
+            
             if (!staged_vessel)
+            {
+                Timer_Trigger = Planetarium.GetUniversalTime() + 1;
                 separated_vessel = true;
+                timer_active = true;
+                timer_cuto_active = true;
+                Time_Trigger_Cuto = Planetarium.GetUniversalTime();
+            }
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving vessel_create_routine(Vessel input)");
@@ -1301,6 +1306,25 @@ namespace FMRS
         
                 if (timer_active)
                 {
+                    if (timer_cuto_active)
+                    {
+                        if ((Time_Trigger_Cuto + 0.1) <= Planetarium.GetUniversalTime())
+                        {
+                            if (Debug_Active)
+                                Debug.Log("#### FMRS: auto thrust cut off");
+
+                            foreach (Vessel temp_vessel in FlightGlobals.Vessels)
+                            {
+                                if (!Vessels.Contains(temp_vessel.id))
+                                {
+                                    if (_SETTING_Auto_Cut_Off)
+                                        temp_vessel.ctrlState.mainThrottle = 0;
+                                }
+                            }
+                            timer_cuto_active = false;
+                        }
+                    }
+
                     if ((Timer_Trigger + Timer_Delay) <= Planetarium.GetUniversalTime())
                     {
                         if (Debug_Active)
@@ -1743,7 +1767,7 @@ namespace FMRS
                 if (message != "")
                     set_recoverd_value("message", "FMRS Recovery Info: " + proto_vessel.vesselName, message);
 
-                Vessels_dropped_recovered.Add(proto_vessel.vesselID);
+                set_vessel_state(proto_vessel.vesselID, vesselstate.RECOVERED);
             }
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leave recover_vessel(Guid Vessel_id, Game save)");
@@ -1818,7 +1842,6 @@ namespace FMRS
 
                             subject = new ScienceSubject(line[0].Trim(), line[1].Trim(), float.Parse(line[2].Trim()), float.Parse(line[3].Trim()), float.Parse(line[4].Trim()));
                         }
-
                         ResearchAndDevelopment.Instance.SubmitScienceData(float.Parse(recover_data.value), subject, 1f);
                     }
                     if (recover_data.cat == "science_sent")
@@ -1836,7 +1859,6 @@ namespace FMRS
 
                             subject = new ScienceSubject(line[0].Trim(), line[1].Trim(), float.Parse(line[2].Trim()), float.Parse(line[3].Trim()), float.Parse(line[4].Trim()));
                         }
-
                         ResearchAndDevelopment.Instance.SubmitScienceData(float.Parse(recover_data.value), subject, 1f);
                     }
                 }

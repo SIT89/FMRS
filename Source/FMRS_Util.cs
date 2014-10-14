@@ -25,7 +25,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 using KSP.IO;
@@ -44,14 +43,13 @@ namespace FMRS
             public string value;
         }
 
-        public enum save_cat : int { SETTING = 1, SAVE, SAVEFILE, DROPPED, NAME, LANDED, DESTROYED, RECOVERED, KERBAL_DROPPED, UNDEF };
+        public enum save_cat : int { SETTING = 1, SAVE, SAVEFILE, DROPPED, NAME, STATE, KERBAL_DROPPED, UNDEF };
+        public enum vesselstate : int {NONE = 1, FLY, LANDED, DESTROYED, RECOVERED }
 
         public List<Guid> Vessels = new List<Guid>();
         public Dictionary<Guid, string> Vessels_dropped = new Dictionary<Guid, string>();
         public Dictionary<Guid, string> Vessels_dropped_names = new Dictionary<Guid, string>();
-        public List<Guid> Vessels_dropped_landed = new List<Guid>();
-        public List<Guid> Vessels_dropped_destroyed = new List<Guid>();
-        public List<Guid> Vessels_dropped_recovered = new List<Guid>();
+        public Dictionary<Guid, vesselstate> Vessel_State = new Dictionary<Guid, vesselstate>();
         public Dictionary<String, Guid> Kerbal_dropped = new Dictionary<string, Guid>();
         public List<recover_value> recover_values = new List<recover_value>();
         public bool Debug_Active = true, bflush_save_file = false;
@@ -138,7 +136,7 @@ namespace FMRS
             {
                 foreach (KeyValuePair<string, string> writevalue in save_cat_block.Value)
                 {
-                   file.WriteLine(save_cat_block.Key.ToString() + "=" + writevalue.Key + "=" + writevalue.Value);
+                   file.WriteLine(save_cat_toString(save_cat_block.Key) + "=" + writevalue.Key + "=" + writevalue.Value);
                 }
             }
             file.Close();
@@ -159,9 +157,7 @@ namespace FMRS
 
             Save_File_Content[save_cat.DROPPED].Clear();
             Save_File_Content[save_cat.NAME].Clear();
-            Save_File_Content[save_cat.LANDED].Clear();
-            Save_File_Content[save_cat.DESTROYED].Clear();
-            Save_File_Content[save_cat.RECOVERED].Clear();
+            Save_File_Content[save_cat.STATE].Clear();
             
             foreach (KeyValuePair<Guid, string> write_keyvalue in Vessels_dropped)
             {
@@ -177,25 +173,12 @@ namespace FMRS
                     Debug.Log("#### FMRS: write NAME " + write_keyvalue.Key.ToString() + " to Save_File_Content");
             }
 
-            foreach (Guid id  in Vessels_dropped_landed)
+            foreach (KeyValuePair<Guid,vesselstate> st  in Vessel_State)
             {
-                set_save_value(save_cat.LANDED, id.ToString(),true.ToString());
-                if (Debug_Active)
-                    Debug.Log("#### FMRS: write LANDED " + id.ToString() + " to Save_File_Content");
-            }
+                set_save_value(save_cat.STATE, st.Key.ToString(), st.Value.ToString());
 
-            foreach (Guid id in Vessels_dropped_destroyed)
-            {
-                set_save_value(save_cat.DESTROYED, id.ToString(), true.ToString());
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: write DESTROYED " + id.ToString() + " to Save_File_Content");
-            }
-
-            foreach (Guid id in Vessels_dropped_recovered)
-            {
-                set_save_value(save_cat.RECOVERED, id.ToString(), true.ToString());
-                if (Debug_Active)
-                    Debug.Log("#### FMRS: write RECOVERED " + id.ToString() + " to Save_File_Content");
+                    Debug.Log("#### FMRS: write " + st.Key.ToString() + " " + st.ToString() + " to Save_File_Content");
             }
 
             foreach (KeyValuePair<string, Guid> write_keyvalue in Kerbal_dropped)
@@ -516,31 +499,13 @@ namespace FMRS
                             Debug.Log(" #### FMRS: " + save_value.Key.ToString() + " set to " + save_value.Value + " in Vessels_dropped_names");
                     }
 
-                if (savecat.Key == save_cat.LANDED)
+                if (savecat.Key == save_cat.STATE)
                     foreach (KeyValuePair<string, string> save_value in savecat.Value)
                     {
-                        Vessels_dropped_landed.Add(new Guid(save_value.Key));
+                        Vessel_State.Add(new Guid(save_value.Key), parse_vesselstate(save_value.Value));
 
                         if (Debug_Active)
                             Debug.Log(" #### FMRS: " + save_value.Key.ToString() + " set to " + save_value.Value + " in Vessels_dropped_landed");
-                    }
-
-                if (savecat.Key == save_cat.DESTROYED)
-                    foreach (KeyValuePair<string, string> save_value in savecat.Value)
-                    {
-                        Vessels_dropped_destroyed.Add(new Guid(save_value.Key));
-
-                        if (Debug_Active)
-                            Debug.Log(" #### FMRS: " + save_value.Key + " set to " + save_value.Value + " in Vessels_dropped_destroyed");
-                    }
-
-                if (savecat.Key == save_cat.RECOVERED)
-                    foreach (KeyValuePair<string, string> save_value in savecat.Value)
-                    {
-                        Vessels_dropped_recovered.Add(new Guid(save_value.Key));
-
-                        if (Debug_Active)
-                            Debug.Log(" #### FMRS: " + save_value.Key + " set to " + save_value.Value + " in Vessels_dropped_recovered");
                     }
 
                 if (savecat.Key == save_cat.KERBAL_DROPPED)
@@ -645,10 +610,11 @@ namespace FMRS
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: enter write_recover_file()");
-            if (Debug_Active)
-                Debug.Log("#### FMRS: write recover file");
 
             flush_recover_file();
+
+            if (Debug_Active)
+                Debug.Log("#### FMRS: write recover file");
 
             TextWriter file = File.CreateText<FMRS>("recover.txt", dummy_vessel);
 
@@ -659,7 +625,7 @@ namespace FMRS
             file.Close();
 
             if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: write_recover_file()");
+                Debug.Log("#### FMRS: leave write_recover_file()");
         }
 
 
@@ -686,49 +652,58 @@ namespace FMRS
 /*************************************************************************************************************************/
         public save_cat save_cat_parse(string in_string)
         {
-            save_cat tempcat;
-
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: enter save_cat_parse(string in_string) " + in_string);
+            if (Debug_Level_2_Active)
+                Debug.Log("#### FMRS: enter save_cat_parse(string in_string) " + in_string + " NO LEAVE MESSAGE");
 
             switch (in_string)
             {
                 case "SETTING":
-                    tempcat = save_cat.SETTING;
-                    break;
+                    return save_cat.SETTING;
                 case "SAVE":
-                    tempcat = save_cat.SAVE;
-                    break;
+                    return save_cat.SAVE;
                 case "SAVEFILE":
-                    tempcat = save_cat.SAVEFILE;
-                    break;
-                case "DROPPED":
-                    tempcat = save_cat.DROPPED;
-                    break;
-                case "NAME":
-                    tempcat = save_cat.NAME;
-                    break;
-                case "LANDED":
-                    tempcat = save_cat.LANDED;
-                    break;
-                case "DESTROYED":
-                    tempcat = save_cat.DESTROYED;
-                    break;
-                case "RECOVERED":
-                    tempcat = save_cat.RECOVERED;
-                    break;
+                    return save_cat.SAVEFILE;
+                case "VESSEL_DROPPED":
+                    return save_cat.DROPPED;
+                case "VESSEL_NAME":
+                    return save_cat.NAME;
+                case "VESSEL_STATE":
+                    return save_cat.STATE;
                 case "KERBAL_DROPPED":
-                    tempcat = save_cat.KERBAL_DROPPED;
-                    break;
+                    return save_cat.KERBAL_DROPPED;
 
                 default:
-                    tempcat = save_cat.UNDEF;
-                    break;
+                    return save_cat.UNDEF;
             }
+        }
 
-            if (Debug_Level_1_Active)
-                Debug.Log("#### FMRS: leave save_cat_parse(string in_string)");
-            return tempcat;
+
+/*************************************************************************************************************************/
+        public string save_cat_toString(save_cat cat)
+        {
+            if (Debug_Level_2_Active)
+                Debug.Log("#### FMRS: enter string save_cat_toString(save_cat cat) " + cat.ToString() + " NO LEAVE MESSAGE");
+
+            switch (cat)
+            {
+                case save_cat.SETTING:
+                    return "SETTING";
+                case save_cat.SAVE:
+                    return "SAVE";
+                case save_cat.SAVEFILE:
+                    return "SAVEFILE";
+                case save_cat.DROPPED:
+                    return "VESSEL_DROPPED";
+                case save_cat.NAME:
+                    return "VESSEL_NAME";
+                case save_cat.STATE:
+                    return "VESSEL_STATE";
+                case save_cat.KERBAL_DROPPED:
+                    return "KERBAL_DROPPED";
+
+                default:
+                    return "UNDEF";
+            }
         }
 
         
@@ -742,9 +717,7 @@ namespace FMRS
 
             Vessels_dropped.Clear();
             Vessels_dropped_names.Clear();
-            Vessels_dropped_landed.Clear();
-            Vessels_dropped_destroyed.Clear();
-            Vessels_dropped_recovered.Clear();
+            Vessel_State.Clear();
             Kerbal_dropped.Clear();
             Save_File_Content[save_cat.SAVEFILE].Clear();
 
@@ -771,12 +744,8 @@ namespace FMRS
                 Vessels_dropped.Remove(vessel_guid);
             if (Vessels_dropped_names.ContainsKey(vessel_guid))
                 Vessels_dropped_names.Remove(vessel_guid);
-            if (Vessels_dropped_landed.Contains(vessel_guid))
-                Vessels_dropped_landed.Remove(vessel_guid);
-            if (Vessels_dropped_destroyed.Contains(vessel_guid))
-                Vessels_dropped_destroyed.Remove(vessel_guid);
-            if (Vessels_dropped_recovered.Contains(vessel_guid))
-                Vessels_dropped_recovered.Remove(vessel_guid);
+            if (Vessel_State.ContainsKey(vessel_guid))
+                Vessel_State.Remove(vessel_guid);
 
             foreach (KeyValuePair<string, Guid> Kerbal in Kerbal_dropped)
                 if (Kerbal.Value == vessel_guid)
@@ -813,20 +782,95 @@ namespace FMRS
             if (!Save_File_Content.ContainsKey(save_cat.NAME))
                 Save_File_Content.Add(save_cat.NAME, new Dictionary<string, string>());
 
-            if (!Save_File_Content.ContainsKey(save_cat.LANDED))
-                Save_File_Content.Add(save_cat.LANDED, new Dictionary<string, string>());
-
-            if (!Save_File_Content.ContainsKey(save_cat.DESTROYED))
-                Save_File_Content.Add(save_cat.DESTROYED, new Dictionary<string, string>());
-
-            if (!Save_File_Content.ContainsKey(save_cat.RECOVERED))
-                Save_File_Content.Add(save_cat.RECOVERED, new Dictionary<string, string>());
+            if (!Save_File_Content.ContainsKey(save_cat.STATE))
+                Save_File_Content.Add(save_cat.STATE, new Dictionary<string, string>());
 
             if (!Save_File_Content.ContainsKey(save_cat.KERBAL_DROPPED))
                 Save_File_Content.Add(save_cat.KERBAL_DROPPED, new Dictionary<string, string>());
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving init_Save_File_Content()");
+        }
+
+
+/*************************************************************************************************************************/
+        public string vesselstate_toString(vesselstate vs)
+        {
+            if (Debug_Level_2_Active)
+                Debug.Log("#### FMRS: entering vesselstate_toString(vesselstate vs) " + vs.ToString() + " NO LEAVE ENTRY");
+
+            switch (vs)
+            {
+                case vesselstate.DESTROYED:
+                    return "DESTROYED";
+                case vesselstate.FLY:
+                    return "FLY";
+                case vesselstate.LANDED:
+                    return "LANDED";
+                case vesselstate.RECOVERED:
+                    return "RECOVERED";
+                default:
+                    return "NONE";
+            }
+        }
+
+
+/*************************************************************************************************************************/
+        public vesselstate parse_vesselstate (string str)
+        {
+            if (Debug_Level_2_Active)
+                Debug.Log("#### FMRS: entering  parse_vesselstate (string str) " + str + " NO LEAVE ENTRY");
+
+            switch (str)
+            {
+                case "DESTROYED":
+                    return vesselstate.DESTROYED;
+                case "FLY":
+                    return vesselstate.FLY;
+                case "LANDED":
+                    return vesselstate.LANDED;
+                case "RECOVERED":
+                    return vesselstate.RECOVERED;
+                default:
+                    return vesselstate.NONE;
+            }
+        }
+
+
+/*************************************************************************************************************************/
+        public vesselstate get_vessel_state(Guid id)
+        {
+            if (Debug_Level_2_Active)
+                Debug.Log("#### FMRS: entering  vesselstate get_vessel_state(Guid id) " + id.ToString() + " NO LEAVE ENTRY");
+
+            if (Vessel_State.ContainsKey(id))
+                return Vessel_State[id];
+            else
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: " + id.ToString() + " NOT IN Vessel_State");
+                return vesselstate.NONE;
+            }
+        }
+
+
+/*************************************************************************************************************************/
+        public bool set_vessel_state(Guid id, vesselstate state)
+        {
+            if (Debug_Level_2_Active)
+                Debug.Log("#### FMRS: entering  bool set_vessel_state(Guid id, vesselstate state) " + id.ToString() + " " + state.ToString() + " NO LEAVE ENTRY");
+
+            if (Vessel_State.ContainsKey(id))
+            {
+                Vessel_State[id] = state;
+                return true;
+            }
+            else
+            {
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: " + id.ToString() + " NOT IN Vessel_State");
+                return false;
+            }
         }
     }
 }

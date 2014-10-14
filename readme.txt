@@ -1,4 +1,4 @@
-[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.02
+[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.03
 ==========================================================
 
 
@@ -89,11 +89,17 @@ Known issues
 
 Change log
 ============
+	v0.2.03
+		serious bug fixed:	switching to spacecenter or trackingstation, while flying a dropped vessel, doesn't kicks you to your main vessel
+							also effects the recover button above the altimeter
+		decouple detection delay increased
+		auto thrust cut off delay decreased
+		main menu module added (deletes wrong save values after a game crash)
 
 	v0.2.02
 		bug fix: starting plugin with toolbar could lead into loading an old save file
 		bug fix: switching to tracking station, while flying dropped stage, doesn't kicks you to main vessel
-		bug fix: the disabled texture for the stock toolbar in not loaded
+		bug fix: the disabled texture for the stock toolbar is not loaded
 		recovering vessel in sandbox now prints a recovery message
 		bounce suppression for the reset button gui added
 
