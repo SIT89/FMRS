@@ -1,4 +1,4 @@
-[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.03
+[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.3.00
 ==========================================================
 
 
@@ -9,7 +9,7 @@ Description
 	It generates save points after separating controllable probes, ship, landers, ...
 	So you can launch your mission into space, then jump back in time to the separation and have full control over your dropped vessels.
 
-	You can do SpaceX´s Falcon 9 style launches and fly your first stage back to the launch site.
+	You can do SpaceXÂ´s Falcon 9 style launches and fly your first stage back to the launch site.
 	Or launch a space plane on the back of a normal plane. Bring the space plan into space and then fly the launch plane back to the runway.
 	Drop scientific probes out of flying planes. Let them descend to the ground and do research.
 
@@ -73,7 +73,7 @@ Known issues
 ============
 
 	Transmitting science during flying a dropped vessel won't return you all science points.
-	Contracts can´t be completed while controlling a dropped vessel.
+	Contracts canÂ´t be completed while controlling a dropped vessel.
 
 	If you encounter any bug, please contact me on the forums.
 	Check the "write debug messages to log file" option in the settings, recreate the bug and send me the log file.
@@ -89,6 +89,15 @@ Known issues
 
 Change log
 ============
+	v0.3.00
+		massive code overhaul of the essential functions (ModuleManager is now required)
+		KSP-AVC support added	
+		strategy support added (recovery factor)
+		messaging system now can be disabled in the settings
+		max window height reduced
+		some minor bug fixes
+		WIP feature ThrustLogger added
+
 	v0.2.03
 		serious bug fixed:	switching to spacecenter or trackingstation, while flying a dropped vessel, doesn't kicks you to your main vessel
 							also effects the recover button above the altimeter
@@ -129,7 +138,7 @@ Change log
 		"Revert To Launch" button is now dependent to the settings in the debug toolbar
 		save file structure changed
 		bug fix: window disappears after decoupling before launch
-		bug fix: plugin doesn´t resets after revert to launch (to a not on launch pad launch)
+		bug fix: plugin doesnÂ´t resets after revert to launch (to a not on launch pad launch)
 		various smaller tweaks to support the update
 
 	v0.1.04
