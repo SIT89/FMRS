@@ -1719,9 +1719,20 @@ namespace FMRS
             if (Debug_Active)
                 Debug.Log("#### FMRS: init_skin");
 
-            mySkin = HighLogic.Skin;
-            mySkin.button.fontSize = 15;
-            mySkin.textArea.fontSize = 15;
+//            mySkin = HighLogic.Skin;
+
+            mySkin = new GUISkin();
+            mySkin.button = new GUIStyle(HighLogic.Skin.button);
+            mySkin.textArea = new GUIStyle(HighLogic.Skin.textArea);
+            mySkin.scrollView = new GUIStyle(HighLogic.Skin.scrollView);
+            mySkin.box = new GUIStyle(HighLogic.Skin.box);
+            mySkin.label = new GUIStyle(HighLogic.Skin.label);
+            mySkin.textField = new GUIStyle(HighLogic.Skin.textField);
+            mySkin.toggle = new GUIStyle(HighLogic.Skin.toggle);
+            mySkin.window = new GUIStyle(HighLogic.Skin.window);
+
+//            mySkin.button.fontSize = 15;
+//            mySkin.textArea.fontSize = 15;
             mySkin.button.normal.textColor = Color.white;
             mySkin.button.hover.textColor = Color.yellow;
             mySkin.button.onNormal.textColor = Color.green;
