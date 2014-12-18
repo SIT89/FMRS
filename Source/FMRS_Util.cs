@@ -43,12 +43,13 @@ namespace FMRS
             public string value;
         }
 
-        public enum save_cat : int { SETTING = 1, SAVE, SAVEFILE, DROPPED, NAME, STATE, KERBAL_DROPPED, UNDEF };
+        public enum save_cat : int { SETTING = 1, SAVE, SAVEFILE, SUBSAVEFILE, DROPPED, NAME, STATE, KERBAL_DROPPED, UNDEF };
         public enum vesselstate : int {NONE = 1, FLY, LANDED, DESTROYED, RECOVERED }
 
         public List<Guid> Vessels = new List<Guid>();
         public Dictionary<Guid, string> Vessels_dropped = new Dictionary<Guid, string>();
         public Dictionary<Guid, string> Vessels_dropped_names = new Dictionary<Guid, string>();
+        public Dictionary<Guid, string> Vessel_sub_save = new Dictionary<Guid, string>();
         public Dictionary<Guid, vesselstate> Vessel_State = new Dictionary<Guid, vesselstate>();
         public Dictionary<String, Guid> Kerbal_dropped = new Dictionary<string, Guid>();
         public List<recover_value> recover_values = new List<recover_value>();
@@ -57,8 +58,9 @@ namespace FMRS
         public Dictionary<save_cat, Dictionary<string, string>> Save_File_Content = new Dictionary<save_cat, Dictionary<string, string>>();
         public Rect windowPos;
         public Guid _SAVE_Main_Vessel;
-        public string _SAVE_Switched_To_Savefile;
-        public bool _SETTING_Enabled, _SETTING_Armed, _SETTING_Auto_Cut_Off, _SETTING_Auto_Recover, _SETTING_Minimize, _SETTING_Throttle_Log, _SAVE_Has_Launched, _SAVE_Has_Closed, _SAVE_Kick_To_Main, _SAVE_Switched_To_Dropped;
+        public string _SAVE_Switched_To_Savefile, _SAVE_SaveFolder;
+        public bool _SETTING_Enabled, _SETTING_Armed, _SETTING_Messages, _SETTING_Auto_Cut_Off, _SETTING_Auto_Recover, _SETTING_Minimize, _SETTING_Throttle_Log, _SAVE_Has_Launched, _SAVE_Flight_Reset, _SAVE_Kick_To_Main, _SAVE_Switched_To_Dropped;
+        public double _SAVE_Launched_At;
 
         public string mod_vers
         {
@@ -115,16 +117,19 @@ namespace FMRS
             set_save_value(save_cat.SETTING, "Armed", _SETTING_Armed.ToString());
             set_save_value(save_cat.SETTING, "Minimized", _SETTING_Minimize.ToString());
             set_save_value(save_cat.SETTING, "Enabled", _SETTING_Enabled.ToString());
+            set_save_value(save_cat.SETTING, "Messages", _SETTING_Messages.ToString());
             set_save_value(save_cat.SETTING, "Auto_Cut_Off", _SETTING_Auto_Cut_Off.ToString());
             set_save_value(save_cat.SETTING, "Auto_Recover", _SETTING_Auto_Recover.ToString());
             set_save_value(save_cat.SETTING, "Throttle_Log", _SETTING_Throttle_Log.ToString());
             set_save_value(save_cat.SETTING, "Debug", Debug_Active.ToString());
             set_save_value(save_cat.SAVE, "Main_Vessel", _SAVE_Main_Vessel.ToString());
             set_save_value(save_cat.SAVE, "Has_Launched", _SAVE_Has_Launched.ToString());
-            set_save_value(save_cat.SAVE, "Has_Closed", _SAVE_Has_Closed.ToString());
+            set_save_value(save_cat.SAVE, "Launched_At", _SAVE_Launched_At.ToString());
+            set_save_value(save_cat.SAVE, "Flight_Reset", _SAVE_Flight_Reset.ToString());
             set_save_value(save_cat.SAVE, "Kick_To_Main", _SAVE_Kick_To_Main.ToString());
             set_save_value(save_cat.SAVE, "Switched_To_Dropped", _SAVE_Switched_To_Dropped.ToString());
-            set_save_value(save_cat.SAVE, "Switched_To_Savefile", _SAVE_Switched_To_Savefile.ToString());
+            set_save_value(save_cat.SAVE, "Switched_To_Savefile", _SAVE_Switched_To_Savefile);
+            set_save_value(save_cat.SAVE, "SaveFolder", _SAVE_SaveFolder);
 
             write_vessel_dict_to_Save_File_Content();
             
@@ -163,14 +168,14 @@ namespace FMRS
             {
                 set_save_value(save_cat.DROPPED, write_keyvalue.Key.ToString(), write_keyvalue.Value);
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: write " + write_keyvalue.Key.ToString() + " to Save_File_Content");
+                    Debug.Log("#### FMRS: write " + write_keyvalue.Key.ToString() + " to Save_File_Content DROPPED");
             }
 
             foreach (KeyValuePair<Guid, string> write_keyvalue in Vessels_dropped_names)
             {
                 set_save_value(save_cat.NAME, write_keyvalue.Key.ToString(), write_keyvalue.Value);
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: write NAME " + write_keyvalue.Key.ToString() + " to Save_File_Content");
+                    Debug.Log("#### FMRS: write NAME " + write_keyvalue.Key.ToString() + " to Save_File_Content NAME");
             }
 
             foreach (KeyValuePair<Guid,vesselstate> st  in Vessel_State)
@@ -178,14 +183,22 @@ namespace FMRS
                 set_save_value(save_cat.STATE, st.Key.ToString(), st.Value.ToString());
 
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: write " + st.Key.ToString() + " " + st.ToString() + " to Save_File_Content");
+                    Debug.Log("#### FMRS: write " + st.Key.ToString() + ": " + st.Value.ToString() + " to Save_File_Content STATE");
+            }
+
+            foreach (KeyValuePair<Guid, string> st in Vessel_sub_save)
+            {
+                set_save_value(save_cat.SUBSAVEFILE, st.Key.ToString(), st.Value.ToString());
+
+                if (Debug_Active)
+                    Debug.Log("#### FMRS: write " + st.Key.ToString() + ": " + st.Value.ToString() + " to Save_File_Content SUBSAVEFILE");
             }
 
             foreach (KeyValuePair<string, Guid> write_keyvalue in Kerbal_dropped)
             {
                 set_save_value(save_cat.KERBAL_DROPPED, write_keyvalue.Key.ToString(), write_keyvalue.Value.ToString());
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: write KERBAL_DROPPED " + write_keyvalue.Key.ToString() + " to Save_File_Content");
+                    Debug.Log("#### FMRS: write KERBAL_DROPPED " + write_keyvalue.Key.ToString() + " to Save_File_Content KERBAL_DROPPED");
             }
 
             if (Debug_Level_1_Active)
@@ -367,20 +380,28 @@ namespace FMRS
                 Debug_Level_2_Active = true;
             }
 
+#if BETA //**************************
+            Debug_Active = true;
+            Debug_Level_1_Active = true;
+#endif //**************************
+
             try
             {
                 _SETTING_Armed = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Armed"));
                 _SETTING_Minimize = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Minimized"));
                 _SETTING_Enabled = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Enabled"));
+                _SETTING_Messages = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Messages"));
                 _SETTING_Auto_Cut_Off = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Auto_Cut_Off"));
                 _SETTING_Auto_Recover = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Auto_Recover"));
                 _SETTING_Throttle_Log = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Throttle_Log"));
                 _SAVE_Main_Vessel = new Guid(get_save_value(save_cat.SAVE, "Main_Vessel"));
                 _SAVE_Has_Launched = Convert.ToBoolean(get_save_value(save_cat.SAVE, "Has_Launched"));
-                _SAVE_Has_Closed = Convert.ToBoolean(get_save_value(save_cat.SAVE, "Has_Closed"));
+                _SAVE_Launched_At = Convert.ToDouble(get_save_value(save_cat.SAVE, "Launched_At"));
+                _SAVE_Flight_Reset = Convert.ToBoolean(get_save_value(save_cat.SAVE, "Flight_Reset"));
                 _SAVE_Kick_To_Main = Convert.ToBoolean(get_save_value(save_cat.SAVE, "Kick_To_Main"));
                 _SAVE_Switched_To_Dropped = Convert.ToBoolean(get_save_value(save_cat.SAVE, "Switched_To_Dropped"));
                 _SAVE_Switched_To_Savefile = get_save_value(save_cat.SAVE, "Switched_To_Savefile");
+                _SAVE_SaveFolder = get_save_value(save_cat.SAVE, "SaveFolder");
             }
             catch (Exception)
             {
@@ -415,24 +436,26 @@ namespace FMRS
             set_save_value(save_cat.SETTING, "Enabled", true.ToString());
             set_save_value(save_cat.SETTING, "Armed", true.ToString());
             set_save_value(save_cat.SETTING, "Minimized", false.ToString());
+            set_save_value(save_cat.SETTING, "Messages", true.ToString());
             set_save_value(save_cat.SETTING, "Auto_Cut_Off", false.ToString());
             set_save_value(save_cat.SETTING, "Auto_Recover", false.ToString());
-            set_save_value(save_cat.SETTING, "Throttle_Log", true.ToString());
+            set_save_value(save_cat.SETTING, "Throttle_Log", false.ToString());
             set_save_value(save_cat.SETTING, "Debug", false.ToString());
             set_save_value(save_cat.SETTING, "Debug_Level", "0");
-            set_save_value(save_cat.SAVE, "Main_Vessel", new Guid().ToString());
-            set_save_value(save_cat.SAVE, "Launched_At", "null");
+            set_save_value(save_cat.SAVE, "Main_Vessel", new Guid().ToString());          
             set_save_value(save_cat.SAVE, "Has_Launched", false.ToString());
-            set_save_value(save_cat.SAVE, "Has_Closed", false.ToString());
+            set_save_value(save_cat.SAVE, "Launched_At", "null");
+            set_save_value(save_cat.SAVE, "Flight_Reset", false.ToString());
             set_save_value(save_cat.SAVE, "Switched_To_Dropped", false.ToString());
             set_save_value(save_cat.SAVE, "Kick_To_Main", false.ToString());
             set_save_value(save_cat.SAVE, "Switched_To_Savefile", "");
-           
+            set_save_value(save_cat.SAVE, "SaveFolder", HighLogic.SaveFolder);
 
-#if DEBUG
+
+#if DEBUG //**************************
             set_save_value(save_cat.SETTING,"Debug", true.ToString());
             set_save_value(save_cat.SETTING, "Debug_Level", "0");
-#endif
+#endif //**************************
 
             Debug_Active = Convert.ToBoolean(get_save_value(save_cat.SETTING, "Debug"));
 
@@ -470,6 +493,8 @@ namespace FMRS
             if (!File.Exists<FMRS>("recover.txt", dummy_vessel))
                 init_recover_file();
             read_recover_file();
+
+            get_dropped_vessels();
         }
 
 
@@ -506,6 +531,15 @@ namespace FMRS
 
                         if (Debug_Active)
                             Debug.Log(" #### FMRS: " + save_value.Key.ToString() + " set to " + save_value.Value + " in Vessels_dropped_landed");
+                    }
+
+                if (savecat.Key == save_cat.SUBSAVEFILE)
+                    foreach (KeyValuePair<string, string> save_value in savecat.Value)
+                    {
+                        Vessel_sub_save.Add(new Guid(save_value.Key), save_value.Value);
+
+                        if (Debug_Active)
+                            Debug.Log(" #### FMRS: " + save_value.Key.ToString() + " set to " + save_value.Value + " in Vessel_sub_save");
                     }
 
                 if (savecat.Key == save_cat.KERBAL_DROPPED)
@@ -663,6 +697,8 @@ namespace FMRS
                     return save_cat.SAVE;
                 case "SAVEFILE":
                     return save_cat.SAVEFILE;
+                case "SUBSAVEFILE":
+                    return save_cat.SUBSAVEFILE;
                 case "VESSEL_DROPPED":
                     return save_cat.DROPPED;
                 case "VESSEL_NAME":
@@ -692,6 +728,8 @@ namespace FMRS
                     return "SAVE";
                 case save_cat.SAVEFILE:
                     return "SAVEFILE";
+                case save_cat.SUBSAVEFILE:
+                    return "SUBSAVEFILE";
                 case save_cat.DROPPED:
                     return "VESSEL_DROPPED";
                 case save_cat.NAME:
@@ -718,6 +756,7 @@ namespace FMRS
             Vessels_dropped.Clear();
             Vessels_dropped_names.Clear();
             Vessel_State.Clear();
+            Vessel_sub_save.Clear();
             Kerbal_dropped.Clear();
             Save_File_Content[save_cat.SAVEFILE].Clear();
 
@@ -746,6 +785,8 @@ namespace FMRS
                 Vessels_dropped_names.Remove(vessel_guid);
             if (Vessel_State.ContainsKey(vessel_guid))
                 Vessel_State.Remove(vessel_guid);
+            if (Vessel_sub_save.ContainsKey(vessel_guid))
+                Vessel_sub_save.Remove(vessel_guid);
 
             foreach (KeyValuePair<string, Guid> Kerbal in Kerbal_dropped)
                 if (Kerbal.Value == vessel_guid)
@@ -775,6 +816,9 @@ namespace FMRS
 
             if (!Save_File_Content.ContainsKey(save_cat.SAVEFILE))
                 Save_File_Content.Add(save_cat.SAVEFILE, new Dictionary<string, string>());
+
+            if (!Save_File_Content.ContainsKey(save_cat.SUBSAVEFILE))
+                Save_File_Content.Add(save_cat.SUBSAVEFILE, new Dictionary<string, string>());
 
             if (!Save_File_Content.ContainsKey(save_cat.DROPPED))
                 Save_File_Content.Add(save_cat.DROPPED, new Dictionary<string, string>());

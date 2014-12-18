@@ -1,4 +1,4 @@
-[0.25.0] Flight Manager for Reusable Stages [FMRS] v0.2.03
+[0.90.0] Flight Manager for Reusable Stages [FMRS] v0.3.01
 ==========================================================
 
 
@@ -89,6 +89,20 @@ Known issues
 
 Change log
 ============
+	v0.3.01
+		compiled with 0.90
+		minor fixes to support the update
+		bug fix: changes the default text size of the game
+		
+	v0.3.00
+		massive code overhaul of the essential functions (ModuleManager is now required)
+		KSP-AVC support added	
+		strategy support added (recovery factor)
+		messaging system now can be disabled in the settings
+		max window height reduced
+		some minor bug fixes
+		WIP feature ThrustLogger added
+
 	v0.2.03
 		serious bug fixed:	switching to spacecenter or trackingstation, while flying a dropped vessel, doesn't kicks you to your main vessel
 							also effects the recover button above the altimeter
