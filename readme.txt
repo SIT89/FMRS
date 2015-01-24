@@ -1,4 +1,4 @@
-[0.90.0] Flight Manager for Reusable Stages [FMRS] v0.3.01
+[0.90.0] Flight Manager for Reusable Stages [FMRS] v0.3.02
 ==========================================================
 
 
@@ -89,6 +89,9 @@ Known issues
 
 Change log
 ============
+	v0.3.02
+		bug fix: Recovering main vessel leads into mission progress loss
+
 	v0.3.01
 		compiled with 0.90
 		minor fixes to support the update
@@ -115,7 +118,8 @@ Change log
 		bug fix: switching to tracking station, while flying dropped stage, doesn't kicks you to main vessel
 		bug fix: the disabled texture for the stock toolbar is not loaded
 		recovering vessel in sandbox now prints a recovery message
-		bounce suppression for the reset button gui added
+		bounce sup
+		sion for the reset button gui added
 
 	v0.2.01
 		compiled with 0.25 x64
