@@ -1,7 +1,7 @@
 ﻿/*
  * The MIT License (MIT)
  * 
- * Copyright (c) 2014 SIT89
+ * Copyright (c) 2015 SIT89
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@ namespace FMRS
     public partial class FMRS_Core : FMRS_Util, IFMRS
     {
 /*************************************************************************************************************************/
-        public void save_landed_vessel(bool auto_recover_allowed)
+        public void save_landed_vessel(bool auto_recover_allowed, bool ForceRecover)
         {
             Game loadgame, savegame;
             Guid temp_guid;
@@ -138,7 +138,7 @@ namespace FMRS
 
                 foreach (KeyValuePair<Guid, List<ProtoVessel>> kvp in vessel_dict)
                 {
-                    if (_SETTING_Auto_Recover && auto_recover_allowed && ReferenceBodyIndex == 1)
+                    if ((_SETTING_Auto_Recover || ForceRecover) && auto_recover_allowed && ReferenceBodyIndex == 1)
                         savegame = recover_vessel(kvp.Key, kvp.Value, loadgame, savegame);
                     else
                     {
@@ -393,7 +393,7 @@ namespace FMRS
                 {
                     GamePersistence.SaveGame("FMRS_main_save", HighLogic.SaveFolder, SaveMode.OVERWRITE);
                 }
-                save_landed_vessel(true);
+                save_landed_vessel(true, false);
             }
 
             Game loadgame = GamePersistence.LoadGame(get_save_value(save_cat.DROPPED, vessel_id.ToString()), HighLogic.SaveFolder + "/FMRS", false, false);
@@ -403,7 +403,8 @@ namespace FMRS
                 if (Debug_Active)
                     Debug.Log("#### FMRS: try to load gamefile " + get_save_value(save_cat.DROPPED, vessel_id.ToString()));
 
-                for (load_vessel = 0; load_vessel < loadgame.flightState.protoVessels.Count && loadgame.flightState.protoVessels[load_vessel].vesselID != vessel_id; load_vessel++) ;
+                for (load_vessel = 0; load_vessel < loadgame.flightState.protoVessels.Count && loadgame.flightState.protoVessels[load_vessel].vesselID != vessel_id; load_vessel++);
+
                 if (load_vessel <= loadgame.flightState.protoVessels.Count)
                 {
                     if (Debug_Active)
@@ -412,10 +413,14 @@ namespace FMRS
                     if (vessel_id != _SAVE_Main_Vessel)
                     {
                         _SAVE_Switched_To_Savefile = get_save_value(save_cat.DROPPED, vessel_id.ToString());
+                        Debug.Log("#### FMRS: sithilfe: " + _SAVE_Switched_To_Savefile);
                         _SAVE_Switched_To_Dropped = true;
                     }
                     else
+                    {
                         _SAVE_Switched_To_Dropped = false;
+                    }
+
                     FlightDriver.StartAndFocusVessel(loadgame, load_vessel);
                 }
             }
@@ -439,7 +444,7 @@ namespace FMRS
             if (!_SAVE_Switched_To_Dropped)
                 return;
 
-            save_landed_vessel(true);
+            save_landed_vessel(true, false);
 
             loadgame = GamePersistence.LoadGame("FMRS_main_save", HighLogic.SaveFolder, false, false);
 

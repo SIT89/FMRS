@@ -1,4 +1,4 @@
-[0.90.0] Flight Manager for Reusable Stages [FMRS] v0.3.02
+[1.0.2] Flight Manager for Reusable Stages [FMRS] v1.0.00
 ==========================================================
 
 
@@ -89,6 +89,9 @@ Known issues
 
 Change log
 ============
+	v1.0.00
+		compatible with KSP 1.0.2
+
 	v0.3.02
 		bug fix: Recovering main vessel leads into mission progress loss
 

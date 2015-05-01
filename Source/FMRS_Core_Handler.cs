@@ -1,7 +1,7 @@
 ﻿/*
  * The MIT License (MIT)
  * 
- * Copyright (c) 2014 SIT89
+ * Copyright (c) 2015 SIT89
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -303,7 +303,7 @@ namespace FMRS
                     set_recoverd_value("warning", "FMRS Info:", "You have switched scenes, while controlling a dropped vessel.@Next time, please use the 'Jump back to Main Mission' button, before switching scenes.");
                     _SAVE_Kick_To_Main = true;
                     _SAVE_Switched_To_Dropped = false;
-                    save_landed_vessel(true);
+                    save_landed_vessel(true, false);
                 }
                 else
                     _SETTING_Enabled = false;
@@ -325,7 +325,7 @@ namespace FMRS
             if (HighLogic.CurrentGame.Mode != Game.Modes.CAREER)
             {
                 if (Debug_Active)
-                    Debug.Log("#### FMRS: not in carreer mode, leave contract_routine(Contracts.Contract input_contract)");
+                    Debug.Log("#### FMRS: not in carreer mode, leave contract_routine(Contracts.Contract input_contract)"); 
                 return;
             }
 
@@ -340,7 +340,7 @@ namespace FMRS
 
 
 /*************************************************************************************************************************/
-        public void science_sent_routine(float science, ScienceSubject input_science_sub)
+        public void science_sent_routine(float science, ScienceSubject input_science_sub, ProtoVessel vessel, bool boolValue)
         {
             science_data_sent data;
 

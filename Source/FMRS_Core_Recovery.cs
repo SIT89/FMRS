@@ -1,7 +1,7 @@
 ﻿/*
  * The MIT License (MIT)
  * 
- * Copyright (c) 2014 SIT89
+ * Copyright (c) 2015 SIT89
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -228,7 +228,7 @@ namespace FMRS
                 return;
             }
 
-            save_landed_vessel(true);
+            save_landed_vessel(true, true);
             _SAVE_Kick_To_Main = true;
             _SAVE_Switched_To_Dropped = false;
 

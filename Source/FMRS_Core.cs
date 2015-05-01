@@ -38,7 +38,7 @@ namespace FMRS
 {
     public partial class FMRS_Core : FMRS_Util , IFMRS
     {
-        private string version_number = "0.3.02";
+        private string version_number = "1.0.00";
         public bool plugin_active = false;
         public double Time_Trigger_Staging, Time_Trigger_Start_Delay, Time_Trigger_Cuto;
         public bool timer_staging_active = false, timer_start_delay_active = false, timer_cuto_active = false;
@@ -86,6 +86,9 @@ namespace FMRS
 /*************************************************************************************************************************/
         public void FMRS_core_awake()
         {
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: entering FMRS_core_awake()");
+
             mod_vers = "v";
 
 #if DEBUG //**************************
@@ -103,6 +106,9 @@ namespace FMRS
 #endif //**************************
             init_Save_File_Content();
             load_save_file();
+
+            if (Debug_Level_1_Active)
+                Debug.Log("#### FMRS: leaving FMRS_core_awake()");
         }
 
 
@@ -168,8 +174,12 @@ namespace FMRS
                 foreach (KeyValuePair<Guid, string> kvp in Vessels_dropped)
                 {
                     if (kvp.Value == _SAVE_Switched_To_Savefile)
+                    {
                         if (get_vessel_state(kvp.Key) == vesselstate.FLY)
+                        {
                             loaded_vessels.Add(kvp.Key);
+                        }
+                    }
                 }
                 if (Debug_Active)
                     Debug.Log("#### FMRS: loaded_vessels: " + loaded_vessels.Count.ToString());

@@ -38,7 +38,7 @@ namespace FMRS
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class FMRS : FMRS_Core
     {
-        public ApplicationLauncherButton Stock_Toolbar_Button;      
+        public ApplicationLauncherButton Stock_Toolbar_Button = new ApplicationLauncherButton();
 
 /*************************************************************************************************************************/
         public FMRS()
@@ -54,12 +54,20 @@ namespace FMRS
             
             FMRS_core_awake();
 
-            Debug.Log("#### FMRS Version: " + mod_vers);         
+            stb_texture = new Texture2D(38, 38);
+            stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(KSPUtil.ApplicationRootPath, "GameData/FMRS/icons/tb_st_di.png")));
+
+            if (ApplicationLauncher.Ready == true)
+            {
+                add_toolbar_button();
+            }
+
+            Debug.Log("#### FMRS Version: " + mod_vers);
             
             _SAVE_SaveFolder = HighLogic.SaveFolder;
         }
 
-
+        
 /*************************************************************************************************************************/
         void Start()
         {
@@ -79,13 +87,6 @@ namespace FMRS
                 GameEvents.onLaunch.Add(launch_routine);
             }
 
-            stb_texture = new Texture2D(36, 36, TextureFormat.RGBA32, false);
-
-            if (_SETTING_Enabled)
-                stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "icons/tb_st_en.png")));
-            else
-                stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "icons/tb_st_di.png")));
-
             if (ToolbarManager.ToolbarAvailable)
             {
                 Toolbar_Button = ToolbarManager.Instance.add("FMRS", "FMRSbutton");
@@ -102,10 +103,11 @@ namespace FMRS
                 Toolbar_Button.OnClick += (e) => toolbar_button_clicked();
             }
 
-            GameEvents.onGUIApplicationLauncherReady.Add(add_toolbar_button);
-            
             if (_SETTING_Enabled)
+            {
                 flight_scene_start_routine();
+                stb_texture.LoadImage(System.IO.File.ReadAllBytes(Path.Combine(KSPUtil.ApplicationRootPath, "GameData/FMRS/icons/tb_st_en.png")));
+            }
 
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: leaving Start ()");
@@ -141,13 +143,13 @@ namespace FMRS
             if (Debug_Level_1_Active)
                 Debug.Log("#### FMRS: enter OnDestroy()");
 
+            destroy_FMRS();
+
             if (ToolbarManager.ToolbarAvailable)
                 Toolbar_Button.Destroy();
 
             GameEvents.onGUIApplicationLauncherReady.Remove(add_toolbar_button);
             ApplicationLauncher.Instance.RemoveModApplication(Stock_Toolbar_Button);
-
-            destroy_FMRS();
 
             RenderingManager.RemoveFromPostDrawQueue(3, new Callback(drawGUI));
 
@@ -164,7 +166,7 @@ namespace FMRS
                 toolbar_button_clicked,
                 null, null, null, null,
                 ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW,
-                stb_texture);
+                (Texture)stb_texture);
         }
     }
 
@@ -248,6 +250,9 @@ namespace FMRS
                         if (load_vessel < savegame.flightState.protoVessels.Count)
                             FlightDriver.StartAndFocusVessel(savegame, load_vessel);
                     }
+
+                    write_save_values_to_file();
+                    write_recover_file();
                 }
             }
         }
@@ -256,7 +261,6 @@ namespace FMRS
 /*************************************************************************************************************************/
         void OnDestroy()
         {
-            destroy_FMRS();
         }
     }
 
@@ -404,7 +408,8 @@ namespace FMRS
                 _SAVE_Switched_To_Dropped = false;
             }
 
-            destroy_FMRS();
+            write_save_values_to_file();
+            write_recover_file();
         }
 
 
