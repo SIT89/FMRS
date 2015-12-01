@@ -1,7 +1,7 @@
 ﻿/*
  * The MIT License (MIT)
  * 
- * Copyright (c) 2014 SIT89
+ * Copyright (c) 2015 SIT89
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -38,7 +38,7 @@ namespace FMRS
 {
     public partial class FMRS_Core : FMRS_Util , IFMRS
     {
-        private string version_number = "1.0.00";
+        private string version_number = "1.0.01";
         public bool plugin_active = false;
         public double Time_Trigger_Staging, Time_Trigger_Start_Delay, Time_Trigger_Cuto;
         public bool timer_staging_active = false, timer_start_delay_active = false, timer_cuto_active = false;

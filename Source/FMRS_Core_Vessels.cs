@@ -157,7 +157,7 @@ namespace FMRS
                                 savegame.flightState.protoVessels.Add(pv);
                                 set_vessel_state(kvp.Key, vesselstate.LANDED);
                             }
-                        }     
+                        }
                     }
                 }
             }

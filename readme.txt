@@ -1,4 +1,4 @@
-[1.0.2] Flight Manager for Reusable Stages [FMRS] v1.0.00
+[1.0.5] Flight Manager for Reusable Stages [FMRS] v1.0.01
 ==========================================================
 
 
@@ -83,12 +83,13 @@ Known issues
 	KSP Bugs
 	Loading nearby vessels in atmosphere.
 	http://bugs.kerbalspaceprogram.com/issues/2429
-	Loading deployed parachutes.
-	http://forum.kerbalspaceprogram.com/threads/75302-Parachutes-lost-on-quickload-in-atmosphere?highlight=quickload
 	
 
 Change log
 ============
+	v1.0.01
+		built for KSP 1.0.5
+
 	v1.0.00
 		compatible with KSP 1.0.2
 
@@ -182,7 +183,7 @@ Licence
 
 	/* The MIT License (MIT)
 	 * 
-	 * Copyright (c) 2014 SIT89
+	 * Copyright (c) 2015 SIT89
 	 * 
 	 * Permission is hereby granted, free of charge, to any person obtaining a copy
 	 * of this software and associated documentation files (the "Software"), to deal
